@@ -31,6 +31,11 @@ dev = [
 [project.scripts]
 pdf2deck = "pdf2deck.app:main"
 
+[tool.uv]
+# Skip releases newer than this; Windows Smart App Control blocks unsigned
+# wheels that are too new to have a reputation.
+exclude-newer = "2 weeks"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/pdf2deck"]
 
