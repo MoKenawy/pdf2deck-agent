@@ -10,6 +10,8 @@ class LlmService:
         self.model = ChatOpenAI(
             model=settings.model_name,
             temperature=settings.model_temperature,
+            api_key=settings.openai_api_key,
+            base_url=settings.openai_base_url,
         )
 
     def create_outline(

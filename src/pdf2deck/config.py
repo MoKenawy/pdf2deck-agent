@@ -1,14 +1,16 @@
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore", env_ignore_empty=True)
 
     app_env: str = "development"
+    openai_api_key: SecretStr | None = None
+    openai_base_url: str | None = None
     model_name: str = "gpt-5-mini"
     model_temperature: float = Field(default=0.1, ge=0.0, le=2.0)
 
