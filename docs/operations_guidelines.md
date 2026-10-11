@@ -43,23 +43,39 @@ Controls:
 
 ## 4. Local setup
 
+The project is managed with [uv](https://docs.astral.sh/uv/). Install it first:
+
 ```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -e ".[dev]"
-cp .env.example .env
-python -m pdf2deck.app
+curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
 Windows PowerShell:
 
 ```powershell
-py -3.11 -m venv .venv
-.venv\Scripts\Activate.ps1
-pip install -e ".[dev]"
-copy .env.example .env
-python -m pdf2deck.app
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
 ```
+
+Then set up and run the app:
+
+```bash
+uv sync --extra dev
+cp .env.example .env
+uv run pdf2deck
+```
+
+Windows PowerShell:
+
+```powershell
+uv sync --extra dev
+copy .env.example .env
+uv run pdf2deck
+```
+
+Notes:
+- `uv sync` creates `.venv`, installs the project in editable mode, and writes `uv.lock`. Commit `uv.lock` so every environment resolves the same versions.
+- `uv run` executes inside `.venv` without activating it.
+- Supported Python is `>=3.11,<3.14`. uv downloads a matching interpreter if none is installed; pin one with `uv python pin 3.11`.
+- Omit `--extra dev` for a runtime-only install. In CI and deployment builds use `uv sync --locked` so the build fails if `uv.lock` is out of date.
 
 ## 5. Health checks
 

@@ -25,16 +25,26 @@ The LLM is responsible for semantic transformation; deterministic Python code ow
 
 ## Quick start
 
+Requires [uv](https://docs.astral.sh/uv/getting-started/installation/) and Python 3.11–3.13 (uv downloads a matching interpreter if none is installed).
+
 ```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -e ".[dev]"
+uv sync --extra dev
 cp .env.example .env
 # add OPENAI_API_KEY
-python -m pdf2deck.app
+uv run pdf2deck
 ```
 
+`uv sync` creates `.venv`, installs the project in editable mode with the `dev` extra, and writes `uv.lock`. `uv run` executes inside that environment, so there is no need to activate it.
+
 Open the Gradio URL printed by the app.
+
+Development commands:
+
+```bash
+uv run pytest
+uv run ruff check .
+uv run mypy src
+```
 
 ## Template usage
 
