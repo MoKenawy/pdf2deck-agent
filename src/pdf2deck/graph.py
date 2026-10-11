@@ -4,14 +4,18 @@ from pathlib import Path
 from typing import Literal
 
 from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command, interrupt
 
 from .config import Settings
-from .schemas import DeckState, ExecutionEvent, StyledSlide
+from .schemas import DeckState, ExecutionEvent, StrictModel, StyledSlide
 from .services.llm_service import LlmService
 from .services.pdf_service import PdfService
 from .services.pptx_service import PptxService
+
+OUTLINE_REVIEW = "outline_review"
+DECK_REVIEW = "deck_review"
 
 
 class DeckGraph:
@@ -64,7 +68,7 @@ class DeckGraph:
 
     def approve_outline(self, state: DeckState) -> dict:
         decision = interrupt({
-            "checkpoint": "outline_review",
+            "checkpoint": OUTLINE_REVIEW,
             "message": "Review the generated outline. Resume with {'approved': true} or {'approved': false}.",
             "outline": state.outline.model_dump() if state.outline else None,
         })
@@ -119,7 +123,7 @@ class DeckGraph:
 
     def approve_deck(self, state: DeckState) -> dict:
         decision = interrupt({
-            "checkpoint": "deck_review",
+            "checkpoint": DECK_REVIEW,
             "message": "Review the generated deck. Resume with {'approved': true}.",
             "artifact": state.artifact.model_dump() if state.artifact else None,
         })
@@ -152,5 +156,12 @@ class DeckGraph:
         graph.add_edge("validate_artifact", "approve_deck")
         graph.add_edge("approve_deck", END)
 
-        checkpointer = InMemorySaver()
+        # Checkpoints hold the schema models; register them so LangGraph restores
+        # them explicitly instead of through its deprecated allow-anything fallback.
+        serde = JsonPlusSerializer(
+            allowed_msgpack_modules=[
+                (model.__module__, model.__name__) for model in StrictModel.__subclasses__()
+            ]
+        )
+        checkpointer = InMemorySaver(serde=serde)
         return graph.compile(checkpointer=checkpointer)
