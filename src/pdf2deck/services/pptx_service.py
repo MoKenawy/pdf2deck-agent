@@ -1,27 +1,27 @@
 from pathlib import Path
 
 from pptx import Presentation
+from pptx.dml.color import RGBColor
+from pptx.enum.shapes import MSO_SHAPE
+from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
+from pptx.oxml.ns import qn
 from pptx.util import Inches, Pt
 
-from ..schemas import DeckArtifact, DeckOutline, StylePreferences, StyledSlide
+from ..schemas import DeckArtifact, DeckOutline, StyledSlide, StylePreferences
+
+# Index of the empty layout in python-pptx's bundled default template. Its other
+# layouts position their placeholders for a 10 x 7.5 in slide, so every slide is
+# drawn on the blank one from the preferences instead.
+BLANK_LAYOUT = 6
+
+# Slide geometry as fractions of the slide width and height.
+MARGIN_X = 0.06
+CONTENT_WIDTH = 1 - 2 * MARGIN_X
+RULE_HEIGHT = 0.008
+BULLET_INDENT = Inches(0.3)
 
 
 class PptxService:
-    def _load_base(self, template_path: str | None) -> Presentation:
-        prs = Presentation(template_path) if template_path else Presentation()
-        # Keep the presentation theme/master/layouts but remove existing content slides.
-        for slide in list(prs.slides):
-            r_id = slide.slide_id
-            slide_id = prs.slides._sldIdLst[0].rId if prs.slides._sldIdLst else None
-            # Public API has no remove-slide operation; use the supported underlying
-            # presentation XML collection in this controlled renderer boundary.
-            for sldId in prs.slides._sldIdLst:
-                if int(sldId.id) == r_id:
-                    prs.part.drop_rel(sldId.rId)
-                    prs.slides._sldIdLst.remove(sldId)
-                    break
-        return prs
-
     def render(
         self,
         outline: DeckOutline,
@@ -29,16 +29,14 @@ class PptxService:
         style: StylePreferences,
         output_path: Path,
     ) -> DeckArtifact:
-        prs = self._load_base(style.template_path)
+        prs = Presentation()
+        prs.slide_width = Inches(style.slide_size.width_in)
+        prs.slide_height = Inches(style.slide_size.height_in)
+        blank = prs.slide_layouts[BLANK_LAYOUT]
 
-        title = prs.slides.add_slide(prs.slide_layouts[0])
-        title.shapes.title.text = outline.title
-        if len(title.placeholders) > 1:
-            title.placeholders[1].text = outline.subtitle or "Generated from source chapter"
-
+        self._render_cover(prs, prs.slides.add_slide(blank), outline, style)
         for styled in styled_slides:
-            slide = prs.slides.add_slide(self._layout(prs, styled.layout_name))
-            self._render_slide(slide, styled, style)
+            self._render_slide(prs, prs.slides.add_slide(blank), styled, style)
 
         output_path.parent.mkdir(parents=True, exist_ok=True)
         prs.save(output_path)
@@ -48,46 +46,118 @@ class PptxService:
             title=outline.title,
         )
 
-    def _layout(self, prs: Presentation, name: str):
-        if name == "title":
-            return prs.slide_layouts[0]
-        if name == "comparison" and len(prs.slide_layouts) > 3:
-            return prs.slide_layouts[3]
-        return prs.slide_layouts[1] if len(prs.slide_layouts) > 1 else prs.slide_layouts[0]
+    def _render_cover(
+        self,
+        prs: Presentation,
+        slide,
+        outline: DeckOutline,
+        style: StylePreferences,
+    ) -> None:
+        self._fill_background(slide, style)
+
+        title = self._text_frame(prs, slide, top=0.28, height=0.26)
+        title.vertical_anchor = MSO_ANCHOR.BOTTOM
+        paragraph = title.paragraphs[0]
+        paragraph.alignment = PP_ALIGN.CENTER
+        self._write(
+            paragraph, outline.title, style.fonts.heading, style.type_scale.title_pt,
+            style.colors.main, bold=True,
+        )
+
+        self._add_rule(prs, slide, style, left=0.4, top=0.57, width=0.2)
+
+        subtitle = self._text_frame(prs, slide, top=0.61, height=0.2)
+        paragraph = subtitle.paragraphs[0]
+        paragraph.alignment = PP_ALIGN.CENTER
+        self._write(
+            paragraph, outline.subtitle or "Generated from source chapter",
+            style.fonts.body, style.type_scale.body_pt, style.colors.text,
+        )
 
     def _render_slide(
         self,
+        prs: Presentation,
         slide,
         styled: StyledSlide,
         style: StylePreferences,
     ) -> None:
         plan = styled.plan
-        slide.shapes.title.text = plan.title
+        self._fill_background(slide, style)
 
-        body = None
-        for shape in slide.placeholders:
-            if shape.placeholder_format.idx != 0 and hasattr(shape, "text_frame"):
-                body = shape
-                break
+        title = self._text_frame(prs, slide, top=0.06, height=0.16)
+        title.vertical_anchor = MSO_ANCHOR.BOTTOM
+        self._write(
+            title.paragraphs[0], plan.title, style.fonts.heading, style.type_scale.title_pt,
+            style.colors.main, bold=True,
+        )
 
-        if body is None:
-            box = slide.shapes.add_textbox(
-                Inches(0.8), Inches(1.7), Inches(11.7), Inches(4.8)
-            )
-            body = box
+        self._add_rule(prs, slide, style, left=MARGIN_X, top=0.235, width=CONTENT_WIDTH)
 
-        tf = body.text_frame
-        tf.clear()
+        body = self._text_frame(prs, slide, top=0.27, height=0.65)
         for index, point in enumerate(plan.key_points):
-            p = tf.paragraphs[0] if index == 0 else tf.add_paragraph()
-            p.text = point
-            p.font.size = Pt(22 if style.density == "sparse" else 18)
-            p.font.name = style.font_family
+            paragraph = body.paragraphs[0] if index == 0 else body.add_paragraph()
+            paragraph.space_after = Pt(style.type_scale.body_pt * 0.4)
+            self._add_bullet(paragraph)
+            self._write(
+                paragraph, point, style.fonts.body, style.type_scale.body_pt, style.colors.text
+            )
 
         if style.include_speaker_notes and plan.speaker_notes:
-            try:
-                notes = slide.notes_slide.notes_text_frame
-                notes.text = plan.speaker_notes
-            except Exception:
-                # Notes support varies by python-pptx version/template.
-                pass
+            slide.notes_slide.notes_text_frame.text = plan.speaker_notes
+
+    @staticmethod
+    def _rgb(color: str) -> RGBColor:
+        return RGBColor.from_string(color.lstrip("#").upper())
+
+    def _fill_background(self, slide, style: StylePreferences) -> None:
+        fill = slide.background.fill
+        fill.solid()
+        fill.fore_color.rgb = self._rgb(style.colors.background)
+
+    def _text_frame(self, prs: Presentation, slide, top: float, height: float):
+        box = slide.shapes.add_textbox(
+            int(prs.slide_width * MARGIN_X),
+            int(prs.slide_height * top),
+            int(prs.slide_width * CONTENT_WIDTH),
+            int(prs.slide_height * height),
+        )
+        frame = box.text_frame
+        frame.word_wrap = True
+        # No side insets, so text lines up with the rule.
+        frame.margin_left = frame.margin_right = 0
+        return frame
+
+    def _add_rule(
+        self, prs: Presentation, slide, style: StylePreferences,
+        left: float, top: float, width: float,
+    ) -> None:
+        rule = slide.shapes.add_shape(
+            MSO_SHAPE.RECTANGLE,
+            int(prs.slide_width * left),
+            int(prs.slide_height * top),
+            int(prs.slide_width * width),
+            int(prs.slide_height * RULE_HEIGHT),
+        )
+        rule.fill.solid()
+        rule.fill.fore_color.rgb = self._rgb(style.colors.highlight)
+        rule.line.fill.background()
+        rule.shadow.inherit = False
+
+    @staticmethod
+    def _add_bullet(paragraph) -> None:
+        # python-pptx has no bullet API, and text boxes do not bullet by default.
+        # Must run after spacing is set: buChar follows spcAft in the pPr schema order.
+        properties = paragraph._p.get_or_add_pPr()
+        properties.set("marL", str(BULLET_INDENT))
+        properties.set("indent", str(-BULLET_INDENT))
+        properties.append(properties.makeelement(qn("a:buChar"), {"char": "•"}))
+
+    def _write(
+        self, paragraph, text: str, font: str, size_pt: float, color: str, bold: bool = False
+    ) -> None:
+        run = paragraph.add_run()
+        run.text = text
+        run.font.name = font
+        run.font.size = Pt(size_pt)
+        run.font.bold = bold
+        run.font.color.rgb = self._rgb(color)

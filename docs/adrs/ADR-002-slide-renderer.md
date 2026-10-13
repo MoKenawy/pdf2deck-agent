@@ -16,7 +16,7 @@ Positive:
 - native Python
 - editable PPTX
 - easy unit testing
-- template/presentation can act as the starting design surface
+- the deck is drawn from typed style preferences (a JSON file), so the renderer's inputs are known in advance; an existing presentation is only a source to extract those preferences from, not the base the deck is built on (see issue 007)
 
 Negative:
 - limited support for some advanced PowerPoint features

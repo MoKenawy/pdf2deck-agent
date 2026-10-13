@@ -1,23 +1,52 @@
 from __future__ import annotations
 
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid", validate_assignment=True)
 
 
+HexColor = Annotated[str, Field(pattern=r"^#[0-9A-Fa-f]{6}$")]
+FontName = Annotated[str, Field(min_length=1, max_length=100)]
+# PowerPoint accepts slide dimensions between 1 and 56 inches.
+SlideInches = Annotated[float, Field(ge=1, le=56)]
+FontPoints = Annotated[float, Field(ge=6, le=200)]
+
+
+class SlideSize(StrictModel):
+    width_in: SlideInches = 13.333
+    height_in: SlideInches = 7.5
+
+
+class Palette(StrictModel):
+    main: HexColor = "#1F4E79"
+    highlight: HexColor = "#70AD47"
+    text: HexColor = "#000000"
+    background: HexColor = "#FFFFFF"
+
+
+class Fonts(StrictModel):
+    heading: FontName = "Aptos"
+    body: FontName = "Aptos"
+
+
+class TypeScale(StrictModel):
+    title_pt: FontPoints = 32
+    body_pt: FontPoints = 18
+
+
 class StylePreferences(StrictModel):
     name: str = Field(default="technical-minimal", min_length=1, max_length=100)
     tone: Literal["formal", "educational", "executive", "conversational"] = "educational"
     density: Literal["sparse", "balanced", "dense"] = "balanced"
-    primary_color: str = "#1F4E79"
-    accent_color: str = "#70AD47"
-    font_family: str = "Aptos"
     include_speaker_notes: bool = True
-    template_path: str | None = None
+    slide_size: SlideSize = Field(default_factory=SlideSize)
+    colors: Palette = Field(default_factory=Palette)
+    fonts: Fonts = Field(default_factory=Fonts)
+    type_scale: TypeScale = Field(default_factory=TypeScale)
 
 
 class DocumentChunk(StrictModel):

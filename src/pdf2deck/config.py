@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     max_pdf_mb: int = Field(default=50, gt=0)
     max_chunk_chars: int = Field(default=12000, gt=1000)
     max_slides: int = Field(default=30, ge=3, le=100)
-    default_template_path: Path | None = None
+    default_preferences_path: Path | None = None
 
 
 @lru_cache

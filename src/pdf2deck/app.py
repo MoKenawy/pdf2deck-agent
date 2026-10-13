@@ -4,6 +4,7 @@ import logging
 import time
 import uuid
 from collections.abc import Iterator
+from pathlib import Path
 from typing import Any
 
 import gradio as gr
@@ -11,15 +12,21 @@ from langgraph.types import Command
 
 from .config import get_settings
 from .graph import DECK_REVIEW, OUTLINE_REVIEW, DeckGraph
-from .schemas import DeckOutline, DeckState, StylePreferences
-
+from .preferences import load_preferences
+from .schemas import DeckOutline, DeckState, Fonts, StylePreferences
+from .services.preferences_extractor import PreferencesExtractor
 
 logger = logging.getLogger(__name__)
 
 settings = get_settings()
 graph = DeckGraph(settings).build()
+extractor = PreferencesExtractor()
 
 OUTLINE_PLACEHOLDER = "_The outline will appear here once it has been generated._"
+PREFERENCES_NOTE = (
+    "A preferences file sets the whole style. While one is in use, "
+    "**Style name**, **Tone**, **Density** and **Font** below are ignored."
+)
 
 # Shown while a node is running; nodes not listed here finish near-instantly.
 STEP_STATUS = {
@@ -142,24 +149,68 @@ def _drive(graph_input: Any, run_id: str) -> Iterator[View]:
     yield _view(_status(values, pending), values, pending)
 
 
+def _preferences_path(preferences_file: str | None) -> Path | None:
+    """The preferences file in use: the uploaded one, else the configured default."""
+    if preferences_file:
+        return Path(preferences_file)
+    return settings.default_preferences_path
+
+
+def _style(
+    style_name: str,
+    tone: str,
+    density: str,
+    font_family: str,
+    preferences_file: str | None,
+) -> StylePreferences:
+    path = _preferences_path(preferences_file)
+    if path is None:
+        return StylePreferences(
+            name=style_name,
+            tone=tone,
+            density=density,
+            fonts=Fonts(heading=font_family, body=font_family),
+        )
+    try:
+        return load_preferences(path)
+    except ValueError as exc:
+        raise gr.Error(str(exc)) from exc
+
+
+def form_fields(preferences_file: str | None) -> tuple[Any, ...]:
+    """Lock the four style fields while a preferences file overrides them."""
+    editable = _preferences_path(preferences_file) is None
+    return tuple(gr.update(interactive=editable) for _ in range(4))
+
+
+def extract_preferences(template_file: str | None) -> tuple[str, str]:
+    """Write a starter preferences file from a PPTX; returns its JSON and its path."""
+    if not template_file:
+        raise gr.Error("Upload a PPTX template first.")
+    try:
+        preferences = extractor.extract(Path(template_file))
+    except ValueError as exc:
+        raise gr.Error(str(exc)) from exc
+    content = preferences.model_dump_json(indent=2)
+    path = settings.output_dir / f"{preferences.name}.preferences.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+    return content, str(path)
+
+
 def run_deck(
     pdf_file: str | None,
     style_name: str,
     tone: str,
     density: str,
     font_family: str,
-    template_file: str | None,
+    preferences_file: str | None,
 ) -> Iterator[View]:
     if not pdf_file:
         raise gr.Error("Upload a PDF first.")
 
-    style = StylePreferences(
-        name=style_name,
-        tone=tone,
-        density=density,
-        font_family=font_family,
-        template_path=template_file,
-    )
+    # Resolved before the graph starts, so a bad file fails ahead of the slow outline call.
+    style = _style(style_name, tone, density, font_family, preferences_file)
     state = _initial_state(pdf_file, style)
     for view in _drive(state.model_dump(), state.run_id):
         yield (state.run_id, *view)
@@ -188,11 +239,25 @@ def build_ui() -> gr.Blocks:
         with gr.Row():
             with gr.Column():
                 pdf = gr.File(file_types=[".pdf"], type="filepath", label="Chapter PDF")
-                template = gr.File(file_types=[".pptx"], type="filepath", label="Optional PPTX template")
-                style_name = gr.Textbox(value="technical-minimal", label="Style name")
-                tone = gr.Dropdown(["formal", "educational", "executive", "conversational"], value="educational", label="Tone")
-                density = gr.Dropdown(["sparse", "balanced", "dense"], value="balanced", label="Density")
-                font = gr.Textbox(value="Aptos", label="Font")
+                preferences = gr.File(
+                    file_types=[".json"], type="filepath", label="Optional preferences file (JSON)"
+                )
+                with gr.Accordion("Create a preferences file from a PPTX template", open=False):
+                    template = gr.File(file_types=[".pptx"], type="filepath", label="PPTX template")
+                    extract = gr.Button("Extract preferences")
+                    extracted = gr.Code(language="json", label="Extracted preferences")
+                    extracted_file = gr.File(label="Preferences file")
+                    gr.Markdown("Review or edit the file, then upload it as the preferences file.")
+                default_file = settings.default_preferences_path
+                gr.Markdown(
+                    PREFERENCES_NOTE
+                    + (f" `{default_file.name}` is configured as the default." if default_file else "")
+                )
+                editable = default_file is None
+                style_name = gr.Textbox(value="technical-minimal", label="Style name", interactive=editable)
+                tone = gr.Dropdown(["formal", "educational", "executive", "conversational"], value="educational", label="Tone", interactive=editable)
+                density = gr.Dropdown(["sparse", "balanced", "dense"], value="balanced", label="Density", interactive=editable)
+                font = gr.Textbox(value="Aptos", label="Font", interactive=editable)
                 run = gr.Button("Generate", variant="primary")
                 log = gr.Textbox(label="Graph execution", lines=10)
                 run_id = gr.Textbox(label="Run ID")
@@ -211,9 +276,11 @@ def build_ui() -> gr.Blocks:
             status, outline, log, output,
             approve_outline, reject_outline, approve_deck, reject_deck,
         ]
+        preferences.change(form_fields, preferences, [style_name, tone, density, font])
+        extract.click(extract_preferences, template, [extracted, extracted_file])
         run.click(
             run_deck,
-            inputs=[pdf, style_name, tone, density, font, template],
+            inputs=[pdf, style_name, tone, density, font, preferences],
             outputs=[run_id, *view],
         )
         approve_outline.click(resume_outline, [run_id, gr.State(True)], view)

@@ -46,9 +46,39 @@ uv run ruff check .
 uv run mypy src
 ```
 
-## Template usage
+## Personalization
 
-Upload a `.pptx` template/presentation in the UI. `python-pptx` treats an existing presentation as the starting point for the generated deck; the renderer clones the selected base deck and removes its content slides before adding generated slides. See the official documentation for the template model.
+The look of the deck comes from a JSON preferences file. Every field is optional and falls back to the default shown here; an unknown field is rejected.
+
+```json
+{
+  "name": "technical-minimal",
+  "tone": "educational",
+  "density": "balanced",
+  "include_speaker_notes": true,
+  "slide_size": { "width_in": 13.333, "height_in": 7.5 },
+  "colors": {
+    "main": "#1F4E79",
+    "highlight": "#70AD47",
+    "text": "#000000",
+    "background": "#FFFFFF"
+  },
+  "fonts": { "heading": "Aptos", "body": "Aptos" },
+  "type_scale": { "title_pt": 32, "body_pt": 18 }
+}
+```
+
+`tone` is one of `formal`, `educational`, `executive`, `conversational`; `density` is one of `sparse`, `balanced`, `dense`. Both are passed to the model. The other fields are applied by the renderer: `main` colours titles, `highlight` the rule under them, `text` the body.
+
+- Upload the file in the UI as the preferences file. It then sets the whole style, and the Style name, Tone, Density and Font fields are ignored.
+- Without a file, those four fields set the style and the rest uses the defaults.
+- `DEFAULT_PREFERENCES_PATH` names a file to use whenever none is uploaded.
+
+### Starting from a PowerPoint template
+
+Open **Create a preferences file from a PPTX template** in the UI, upload a `.pptx` and press **Extract preferences**. This reads the template's slide size, theme colours, theme fonts, text sizes and text density into a preferences file. Review or edit it, then upload it as the preferences file.
+
+The template itself is not used to build the deck, so its backgrounds, artwork and layouts do not carry over.
 
 ## Production direction
 

@@ -20,10 +20,12 @@ src/pdf2deck/
   observability.py       # Langfuse boundary
   prompts.py             # prompt text
   skills.py              # versioned prompt metadata
+  preferences.py         # JSON preferences file loading
   services/
     pdf_service.py       # deterministic PDF extraction/chunking
     llm_service.py       # model invocation + structured output
     pptx_service.py      # deterministic artifact rendering
+    preferences_extractor.py  # starter preferences from a .pptx
 tests/
 docs/
 ```
@@ -127,7 +129,9 @@ concept    -> concept layout
 summary    -> summary layout
 ```
 
-A production template registry should map stable semantic layout names to actual PowerPoint layout IDs.
+The renderer draws every slide itself, from `StylePreferences`: slide size, palette, fonts and type scale. It does not use the layouts or placeholders of a user-supplied presentation, because those differ from file to file. The MVP draws every semantic type as a title with bullets; type-specific layouts belong in the renderer, keyed by the semantic layout name.
+
+`StylePreferences` reaches the run as a JSON file (or from the UI form) and is validated before the graph starts. `PreferencesExtractor` can write a starter file from a `.pptx`; it runs from the UI, outside the graph.
 
 ## 9. Renderer boundary
 
@@ -174,7 +178,7 @@ Retry only:
 Do not retry:
 - invalid Pydantic output after a deterministic repair limit,
 - invalid PDF,
-- template corruption,
+- invalid preferences file,
 - unsupported slide layout.
 
 Use exponential backoff with jitter and a small maximum attempt count.
@@ -193,7 +197,7 @@ Human verifies:
 ### Artifact checkpoint
 Human verifies:
 - visual hierarchy,
-- template/style fidelity,
+- fidelity to the style preferences,
 - clipping/overflow,
 - readability.
 

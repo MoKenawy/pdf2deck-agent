@@ -1,0 +1,24 @@
+{
+  "name": "teal-and-amber",
+  "tone": "educational",
+  "density": "balanced",
+  "include_speaker_notes": true,
+  "slide_size": {
+    "width_in": 10,
+    "height_in": 5.625
+  },
+  "colors": {
+    "main": "#32AEB8",
+    "highlight": "#F2A40D",
+    "text": "#222222",
+    "background": "#FFFFFF"
+  },
+  "fonts": {
+    "heading": "Arial",
+    "body": "Arial"
+  },
+  "type_scale": {
+    "title_pt": 24,
+    "body_pt": 12
+  }
+}
