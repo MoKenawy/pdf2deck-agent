@@ -13,7 +13,7 @@ def test_empty_pdf_is_rejected(tmp_path: Path):
         writer.write(f)
 
     try:
-        PdfService().extract_and_chunk(path, 5000)
+        PdfService().extract_pages(path)
     except ValueError as exc:
         assert "No extractable text" in str(exc)
     else:
