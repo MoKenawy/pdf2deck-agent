@@ -9,11 +9,12 @@ from typing import Any
 
 import gradio as gr
 from langgraph.types import Command
+from pydantic import ValidationError
 
 from .config import get_settings
 from .graph import DECK_REVIEW, OUTLINE_REVIEW, DeckGraph
 from .preferences import load_preferences
-from .schemas import DeckOutline, DeckState, Fonts, StylePreferences
+from .schemas import DeckOutline, DeckState, Fonts, PageRange, StylePreferences
 from .services.preferences_extractor import PreferencesExtractor
 
 logger = logging.getLogger(__name__)
@@ -42,12 +43,32 @@ STEP_STATUS = {
 View = tuple[Any, ...]
 
 
-def _initial_state(pdf_path: str, style: StylePreferences) -> DeckState:
+def _initial_state(pdf_path: str, style: StylePreferences, page_range: PageRange) -> DeckState:
     return DeckState(
         run_id=str(uuid.uuid4()),
         pdf_path=pdf_path,
         style=style,
+        page_range=page_range,
     )
+
+
+def _page_number(field: str | None) -> int | None:
+    text = (field or "").strip()
+    if not text:
+        return None
+    if not text.isdigit():
+        raise gr.Error(f"Invalid page range: '{text}' is not a page number.")
+    return int(text)
+
+
+def _page_range(first_page: str | None, last_page: str | None) -> PageRange:
+    """Empty fields mean the PDF's first and last page."""
+    first = _page_number(first_page)
+    try:
+        return PageRange(first=1 if first is None else first, last=_page_number(last_page))
+    except ValidationError as exc:
+        problems = "; ".join(error["msg"].removeprefix("Value error, ") for error in exc.errors())
+        raise gr.Error(f"Invalid page range: {problems}") from exc
 
 
 def _config(run_id: str) -> dict[str, Any]:
@@ -207,13 +228,15 @@ def run_deck(
     density: str,
     font_family: str,
     preferences_file: str | None,
+    first_page: str | None = None,
+    last_page: str | None = None,
 ) -> Iterator[View]:
     if not pdf_file:
         raise gr.Error("Upload a PDF first.")
 
     # Resolved before the graph starts, so a bad file fails ahead of the slow outline call.
     style = _style(style_name, tone, density, font_family, preferences_file)
-    state = _initial_state(pdf_file, style)
+    state = _initial_state(pdf_file, style, _page_range(first_page, last_page))
     for view in _drive(state.model_dump(), state.run_id):
         yield (state.run_id, *view)
 
@@ -241,6 +264,10 @@ def build_ui() -> gr.Blocks:
         with gr.Row():
             with gr.Column():
                 pdf = gr.File(file_types=[".pdf"], type="filepath", label="Chapter PDF")
+                # Textboxes, not gr.Number: its frontend shows 0 for an empty value.
+                with gr.Row():
+                    first_page = gr.Textbox(label="First page", info="Empty: page 1")
+                    last_page = gr.Textbox(label="Last page", info="Empty: the last page")
                 preferences = gr.File(
                     file_types=[".json"], type="filepath", label="Optional preferences file (JSON)"
                 )
@@ -282,7 +309,7 @@ def build_ui() -> gr.Blocks:
         extract.click(extract_preferences, template, [extracted, extracted_file])
         run.click(
             run_deck,
-            inputs=[pdf, style_name, tone, density, font, preferences],
+            inputs=[pdf, style_name, tone, density, font, preferences, first_page, last_page],
             outputs=[run_id, *view],
         )
         approve_outline.click(resume_outline, [run_id, gr.State(True)], view)

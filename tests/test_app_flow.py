@@ -13,6 +13,7 @@ from pdf2deck.preferences import load_preferences
 from pdf2deck.schemas import (
     DeckOutline,
     ImageBox,
+    PageRange,
     SlidePlan,
     SourceDocument,
     SourceImage,
@@ -21,13 +22,19 @@ from pdf2deck.schemas import (
 
 
 class FakePdf:
+    """A PDF with `page_count` pages; by default one, so runs see "1 pages"."""
+
     def __init__(self) -> None:
         self.images: list[SourceImage] = []
+        self.page_count = 1
 
-    def extract_document(self, path: Path, image_dir: Path, **limits) -> SourceDocument:
+    def extract_document(
+        self, path: Path, image_dir: Path, page_range: PageRange | None = None, **limits
+    ) -> SourceDocument:
+        numbers = (page_range or PageRange()).numbers(self.page_count)
         return SourceDocument(
             filename=path.name,
-            pages=[SourcePage(number=1, text="Source text.")],
+            pages=[SourcePage(number=number, text="Source text.") for number in numbers],
             images=self.images,
         )
 
@@ -269,3 +276,49 @@ def test_invented_and_reused_image_ids_are_cleared(app, pdf_path, tmp_path):
     assert "img-p9-9" not in outline
     assert outline.count("🖼 Image `img-p1-0`") == 1
     assert "Outline generated (1 images placed)." in log
+
+
+def test_page_range_from_the_form_selects_the_pages(app, pdf_path):
+    app.deck.pdf.page_count = 10
+
+    views = list(app.run_deck(
+        pdf_path, "technical-minimal", "educational", "balanced", "Aptos", None, "3", " 5 "
+    ))
+
+    assert "extract_pdf: Extracted 3 pages (3-5) and 0 images." in views[-1][3]
+    assert "Outline ready" in views[-1][1]
+
+
+def test_page_range_past_the_end_of_the_pdf_stops_the_run(app, pdf_path):
+    app.deck.pdf.page_count = 10
+
+    views = list(app.run_deck(
+        pdf_path, "technical-minimal", "educational", "balanced", "Aptos", None, "8", "12"
+    ))
+
+    assert views[-1][1] == "**Stopped:** Pages 8-12 are outside the PDF, which has 10 pages."
+
+
+def test_reversed_page_range_is_refused_before_the_run_starts(app, pdf_path):
+    with pytest.raises(gr.Error, match="Invalid page range: First page 5 is after last page 3"):
+        list(app.run_deck(
+            pdf_path, "technical-minimal", "educational", "balanced", "Aptos", None, "5", "3"
+        ))
+
+
+@pytest.mark.parametrize("first, last", [("abc", ""), ("2.5", ""), ("", "-4")])
+def test_page_range_that_is_not_a_page_number_is_refused(app, pdf_path, first, last):
+    with pytest.raises(gr.Error, match="is not a page number"):
+        list(app.run_deck(
+            pdf_path, "technical-minimal", "educational", "balanced", "Aptos", None, first, last
+        ))
+
+
+def test_empty_page_range_fields_use_the_whole_pdf(app, pdf_path):
+    app.deck.pdf.page_count = 4
+
+    views = list(app.run_deck(
+        pdf_path, "technical-minimal", "educational", "balanced", "Aptos", None, "", "  "
+    ))
+
+    assert "extract_pdf: Extracted 4 pages and 0 images." in views[-1][3]
