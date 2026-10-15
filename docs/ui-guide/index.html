@@ -302,7 +302,7 @@ footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--line);
       <ol class="legend">
         <li data-n="1"><span>Click the section title to open or close it.</span></li>
         <li data-n="2"><span>The template deck. None of its content is copied into your slides.</span></li>
-        <li data-n="3"><span><b>Extract preferences</b> reads the theme colours and fonts, the common text sizes, the slide size, and how much text a typical slide holds (which sets the density).</span></li>
+        <li data-n="3"><span><b>Extract preferences</b> reads the colours and fonts the slides use, the common text sizes, the slide size, and how much text a typical slide holds (which sets the density).</span></li>
         <li data-n="4"><span>The result appears as JSON just below.</span></li>
       </ol>
     </div>
@@ -311,7 +311,7 @@ footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--line);
   <div class="step">
     <div class="step-head"><span class="step-num">STEP B</span><h3>Check the JSON and download the file</h3></div>
     <div class="step-body">
-      <p>Read through the extracted values, starting with the colours. They come from the template's theme. A deck that colours its shapes directly, rather than through the theme, can return the theme's stock accents instead of the colours you see on its slides. That happened here.</p>
+      <p>Read through the extracted values, starting with the colours. They come from what the template's slides use: <code>main</code> is its brand colour, <code>highlight</code> the next one, <code>text</code> the body text and <code>background</code> the slide background. The theme fills in anything the slides do not set. <code>highlight</code> can come back as a shade of <code>main</code>; change it if you want more contrast.</p>
       <figure class="shot narrow">
         <img src="img/json.jpg" alt="Extracted preferences JSON with colours main 4F81BD and highlight C0504D, fonts Calibri, and a downloadable introduction-to-biology.preferences.json file" width="960" height="868">
         <span class="pin" style="left:24%;top:29.6%">1</span>
@@ -319,7 +319,7 @@ footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--line);
         <span class="pin" style="left:95%;top:78.6%">3</span>
       </figure>
       <ol class="legend">
-        <li data-n="1"><span><code>colors</code>: here the theme's stock blue and red came back, not the greens used on the Gemini slides.</span></li>
+        <li data-n="1"><span><code>colors</code>: the palette read from the slides. (This screenshot predates the fix and still shows the theme's stock blue and red; the Gemini deck now gives its greens, <code>#059669</code> and <code>#10B981</code>.)</span></li>
         <li data-n="2"><span>Download or copy the JSON.</span></li>
         <li data-n="3"><span><b>Preferences file</b>: the same JSON saved as <code>&lt;name&gt;.preferences.json</code>. Click the size to download it.</span></li>
       </ol>
