@@ -4,7 +4,7 @@
 
 1. **Typed boundaries**: every graph input/output and LLM payload is a Pydantic v2 model.
 2. **Deterministic rendering**: LLM output becomes a validated `DeckOutline`; the renderer never asks an LLM what to draw.
-3. **Traceability**: every slide carries `source_chunk_ids`.
+3. **Traceability**: every slide carries `source_pages`, and an image only by its extracted `image_id`.
 4. **Resumability**: HITL pauses use LangGraph interrupts and a thread/checkpoint ID.
 5. **Prompt isolation**: prompts are versioned skills, not inline node strings.
 6. **Failure isolation**: observability failures must never block artifact creation.
@@ -22,7 +22,8 @@ src/pdf2deck/
   skills.py              # versioned prompt metadata
   preferences.py         # JSON preferences file loading
   services/
-    pdf_service.py       # deterministic PDF extraction/chunking
+    pdf_service.py       # deterministic page text and image extraction
+    chunking.py          # paragraph chunking (not used by the graph yet)
     llm_service.py       # model invocation + structured output
     pptx_service.py      # deterministic artifact rendering
     preferences_extractor.py  # starter preferences from a .pptx
@@ -38,6 +39,7 @@ The graph state is a Pydantic `DeckState`.
 run_id
 pdf_path
 style
+page_range
 document?
 outline?
 styled_slides[]
@@ -48,13 +50,13 @@ approved_outline
 approved_deck
 ```
 
-The state intentionally does not contain raw model messages. This keeps checkpoints compact and makes state inspectable.
+The state intentionally does not contain raw model messages or image bytes (only paths to the extracted PNGs). This keeps checkpoints compact and makes state inspectable.
 
 ### State ownership
 
 | Field | Producer | Consumers |
 |---|---|---|
-| document | extract_pdf | build_outline |
+| document (pages + images) | extract_pdf | build_outline, map_style |
 | outline | build_outline | HITL, map_style, render |
 | styled_slides | map_style | render |
 | artifact | render | validation, HITL, UI |
@@ -101,9 +103,23 @@ class DocumentExtractor(Protocol):
 
 A production implementation can route pages through OCR only when extracted text density is below a threshold.
 
-## 7. Semantic chunking
+## 7. Pages, images and chunking
 
-The MVP uses page/paragraph-aware chunking to keep source IDs stable.
+`extract_pdf` produces a `SourceDocument` of whole pages plus the content images, limited to
+the user's `page_range` (default: the whole PDF). Pages keep their PDF numbers, so
+`source_pages` and image ids such as `img-p37-0` point at the real page. The outline
+prompt sends every page in one request, so chunking is not part of the graph today;
+`services/chunking.py` is kept for when long documents need it.
+
+Images are found by walking each page's content stream, which gives their position and drawn
+size. Decoration is dropped before the model sees anything: images under `min_image_px`,
+images covering under 1% of the page, and images repeated on `repeated_image_pages` pages or
+more. At most `max_images` are kept. Each is saved as a PNG under
+`<output_dir>/<run_id>/images/` (python-pptx cannot embed JPEG2000), and the state holds only
+its path. The model receives each image as a low-detail picture beside its metadata, and
+chooses at most one per slide; `build_outline` clears ids it invented or reused.
+
+Upgrades when chunking returns:
 
 Production upgrades:
 - section/header detection,
