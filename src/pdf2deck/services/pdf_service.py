@@ -53,38 +53,47 @@ class PdfService:
         Pages keep their numbers in the PDF, so slides and image ids point at the real page.
         """
         reader = PdfReader(str(path))
-        numbers = (page_range or PageRange()).numbers(len(reader.pages))
-        texts = _page_texts(reader, numbers)
+        selected = (page_range or PageRange()).numbers(len(reader.pages))
+        start_page, end_page = selected[0], selected[-1]
+        texts = _page_texts(reader, start_page, end_page)
         images = self.extract_images(
             reader,
             image_dir,
-            numbers=numbers,
+            start_page=start_page,
+            end_page=end_page,
             min_image_px=min_image_px,
             repeated_image_pages=repeated_image_pages,
             max_images=max_images,
         )
         return SourceDocument(
             filename=path.name,
-            pages=[SourcePage(number=number, text=text) for number, text in zip(numbers, texts)],
+            pages=[
+                SourcePage(number=number, text=text)
+                for number, text in enumerate(texts, start=start_page)
+            ],
             images=images,
         )
 
     def extract_pages(self, path: Path) -> list[str]:
         """Return the raw text of each page, in page order."""
         reader = PdfReader(str(path))
-        return _page_texts(reader, range(1, len(reader.pages) + 1))
+        return _page_texts(reader, 1, len(reader.pages))
 
     def extract_images(
         self,
         reader: PdfReader,
         image_dir: Path,
         *,
-        numbers: range | None = None,
+        start_page: int = 1,
+        end_page: int | None = None,
         min_image_px: int,
         repeated_image_pages: int,
         max_images: int,
     ) -> list[SourceImage]:
         """Save the images worth putting on a slide and say where each one is drawn.
+
+        Only pages start_page to end_page are searched, both included and numbered from 1;
+        no end page means to the last page.
 
         Logos, icons and other decoration are dropped: images too small in pixels or on
         the page, and images repeated on many pages. An image drawn on fewer pages than
@@ -93,11 +102,11 @@ class PdfService:
         Only images drawn directly by the page are found; ones inside form XObjects and
         inline images are skipped, and page rotation is ignored.
         """
-        if numbers is None:
-            numbers = range(1, len(reader.pages) + 1)
+        if end_page is None:
+            end_page = len(reader.pages)
         candidates = [
             placement
-            for number in numbers
+            for number in range(start_page, end_page + 1)
             for placement in _placements(reader.pages[number - 1], number)
             if min(placement.width_px, placement.height_px) >= min_image_px
             and _coverage(placement) >= MIN_PAGE_COVERAGE
@@ -142,10 +151,14 @@ class PdfService:
         return images
 
 
-def _page_texts(reader: PdfReader, numbers: range) -> list[str]:
-    texts = [reader.pages[number - 1].extract_text() or "" for number in numbers]
+def _page_texts(reader: PdfReader, start_page: int, end_page: int) -> list[str]:
+    texts = [
+        reader.pages[number - 1].extract_text() or ""
+        for number in range(start_page, end_page + 1)
+    ]
     if not any(text.strip() for text in texts):
-        where = "the PDF" if len(numbers) == len(reader.pages) else f"pages {numbers[0]}-{numbers[-1]}"
+        whole = (start_page, end_page) == (1, len(reader.pages))
+        where = "the PDF" if whole else f"pages {start_page}-{end_page}"
         raise ValueError(f"No extractable text was found in {where}.")
     return texts
 
