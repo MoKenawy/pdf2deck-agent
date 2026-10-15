@@ -13,14 +13,14 @@ class PromptSkill:
 
 OUTLINE_SKILL = PromptSkill(
     name="chapter-to-outline",
-    version="1.0.0",
+    version="1.1.0",
     system=OUTLINE_SYSTEM,
     user_template=OUTLINE_USER,
 )
 
 REVISION_SKILL = PromptSkill(
     name="outline-revision",
-    version="1.0.0",
+    version="1.1.0",
     system=REVISION_SYSTEM,
     user_template="{content}",
 )

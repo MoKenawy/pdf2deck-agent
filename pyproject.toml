@@ -17,6 +17,7 @@ dependencies = [
   "gradio>=5.0,<7.0",
   "pypdf>=5.0,<7.0",
   "python-pptx>=1.0,<2.0",
+  "pillow>=11.0,<13.0",
   "tenacity>=9.0,<10.0",
 ]
 

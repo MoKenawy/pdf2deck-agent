@@ -9,7 +9,15 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command, interrupt
 
 from .config import Settings
-from .schemas import DeckState, ExecutionEvent, StrictModel, StyledSlide
+from .schemas import (
+    DeckOutline,
+    DeckState,
+    ExecutionEvent,
+    PageRange,
+    SourceDocument,
+    StrictModel,
+    StyledSlide,
+)
 from .services.llm_service import LlmService
 from .services.pdf_service import PdfService
 from .services.pptx_service import PptxService
@@ -41,14 +49,22 @@ class DeckGraph:
         return {"events": self._event(state, "validate_input", "completed", "Input validated.")}
 
     def extract_pdf(self, state: DeckState) -> dict:
-        doc = self.pdf.extract_and_chunk(
-            Path(state.pdf_path), self.settings.max_chunk_chars
+        doc = self.pdf.extract_document(
+            Path(state.pdf_path),
+            self.settings.output_dir / state.run_id / "images",
+            page_range=state.page_range,
+            min_image_px=self.settings.min_image_px,
+            repeated_image_pages=self.settings.repeated_image_pages,
+            max_images=self.settings.max_images,
         )
+        selected = ""
+        if state.page_range != PageRange():
+            selected = f" ({doc.pages[0].number}-{doc.pages[-1].number})"
         return {
             "document": doc,
             "events": self._event(
                 state, "extract_pdf", "completed",
-                f"Extracted {doc.pages} pages into {len(doc.chunks)} chunks.",
+                f"Extracted {len(doc.pages)} pages{selected} and {len(doc.images)} images.",
             ),
         }
 
@@ -61,9 +77,13 @@ class DeckGraph:
             state.style.density,
             self.settings.max_slides,
         )
+        outline = _known_images_once(outline, state.document)
+        placed = sum(1 for slide in outline.slides if slide.image_id)
         return {
             "outline": outline,
-            "events": self._event(state, "build_outline", "completed", "Outline generated."),
+            "events": self._event(
+                state, "build_outline", "completed", f"Outline generated ({placed} images placed).",
+            ),
         }
 
     def approve_outline(self, state: DeckState) -> dict:
@@ -83,14 +103,18 @@ class DeckGraph:
     def map_style(self, state: DeckState) -> dict:
         if state.outline is None:
             raise ValueError("Outline is required.")
-        styled = [
-            StyledSlide(
-                plan=slide,
-                layout_name=slide.visual_type,
-                style_name=state.style.name,
+        images = {image.id: image for image in state.document.images} if state.document else {}
+        styled = []
+        for slide in state.outline.slides:
+            image = images.get(slide.image_id) if slide.image_id else None
+            styled.append(
+                StyledSlide(
+                    plan=slide,
+                    layout_name="bullets-with-image" if image else slide.visual_type,
+                    style_name=state.style.name,
+                    image=image,
+                )
             )
-            for slide in state.outline.slides
-        ]
         return {
             "styled_slides": styled,
             "events": self._event(state, "map_style", "completed", "Style mapped to slide plans."),
@@ -165,3 +189,17 @@ class DeckGraph:
         )
         checkpointer = InMemorySaver(serde=serde)
         return graph.compile(checkpointer=checkpointer)
+
+
+def _known_images_once(outline: DeckOutline, document: SourceDocument) -> DeckOutline:
+    """Clear image ids the model invented or reused, so each image appears at most once."""
+    known = {image.id for image in document.images}
+    used: set[str] = set()
+    slides = []
+    for slide in outline.slides:
+        if slide.image_id is not None and (slide.image_id not in known or slide.image_id in used):
+            slide = slide.model_copy(update={"image_id": None})
+        if slide.image_id is not None:
+            used.add(slide.image_id)
+        slides.append(slide)
+    return outline.model_copy(update={"slides": slides})

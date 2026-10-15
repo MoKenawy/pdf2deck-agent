@@ -2,31 +2,60 @@ from pathlib import Path
 
 import gradio as gr
 import pytest
+from PIL import Image
 from pptx import Presentation
+from pptx.enum.shapes import MSO_SHAPE_TYPE
 from pptx.util import Inches
 
 from pdf2deck.config import Settings
 from pdf2deck.graph import DeckGraph
 from pdf2deck.preferences import load_preferences
-from pdf2deck.schemas import DeckOutline, DocumentChunk, SlidePlan, SourceDocument
+from pdf2deck.schemas import (
+    DeckOutline,
+    ImageBox,
+    PageRange,
+    SlidePlan,
+    SourceDocument,
+    SourceImage,
+    SourcePage,
+)
 
 
 class FakePdf:
-    def extract_and_chunk(self, path: Path, max_chunk_chars: int) -> SourceDocument:
-        chunk = DocumentChunk(id="p1-c0", page_start=1, page_end=1, text="Source text.")
-        return SourceDocument(filename=path.name, pages=1, chunks=[chunk])
+    """A PDF with `page_count` pages; by default one, so runs see "1 pages"."""
+
+    def __init__(self) -> None:
+        self.images: list[SourceImage] = []
+        self.page_count = 1
+
+    def extract_document(
+        self, path: Path, image_dir: Path, page_range: PageRange | None = None, **limits
+    ) -> SourceDocument:
+        numbers = (page_range or PageRange()).numbers(self.page_count)
+        return SourceDocument(
+            filename=path.name,
+            pages=[SourcePage(number=number, text="Source text.") for number in numbers],
+            images=self.images,
+        )
 
 
 class FakeLlm:
+    def __init__(self) -> None:
+        self.image_ids: list[str | None] = [None]
+
     def create_outline(self, document, tone, density, max_slides) -> DeckOutline:
-        slide = SlidePlan(
-            slide_id="s1",
-            title="First slide",
-            purpose="Introduce the topic",
-            key_points=["Point one", "Point two"],
-            source_chunk_ids=["p1-c0"],
-        )
-        return DeckOutline(title="Fake deck", learning_objectives=["Learn it"], slides=[slide])
+        slides = [
+            SlidePlan(
+                slide_id=f"s{number}",
+                title="First slide" if number == 1 else f"Slide {number}",
+                purpose="Introduce the topic",
+                key_points=["Point one", "Point two"],
+                source_pages=[1],
+                image_id=image_id,
+            )
+            for number, image_id in enumerate(self.image_ids, start=1)
+        ]
+        return DeckOutline(title="Fake deck", learning_objectives=["Learn it"], slides=slides)
 
 
 @pytest.fixture
@@ -41,6 +70,8 @@ def app(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     deck.llm = FakeLlm()
     monkeypatch.setattr(app_module, "graph", deck.build())
     monkeypatch.setattr(app_module, "settings", settings)
+    # Lets a test choose what the fakes return.
+    monkeypatch.setattr(app_module, "deck", deck, raising=False)
     return app_module
 
 
@@ -68,7 +99,7 @@ def test_generate_shows_outline_and_waits_for_outline_review(app, pdf_path):
     assert "## Fake deck" in outline
     assert "### 1. First slide" in outline
     assert "- Point one" in outline
-    assert "build_outline: Outline generated." in log
+    assert "build_outline: Outline generated (0 images placed)." in log
     assert output is None
     assert _enabled(buttons) == [True, True, False, False]
 
@@ -205,3 +236,89 @@ def test_rejecting_outline_stops_the_run(app, pdf_path):
     assert "Outline was rejected" in status
     assert output is None
     assert _enabled(buttons) == [False, False, False, False]
+
+
+def _figure(tmp_path: Path) -> SourceImage:
+    path = tmp_path / "img-p1-0.png"
+    Image.new("RGB", (400, 300), "red").save(path)
+    return SourceImage(
+        id="img-p1-0",
+        page=1,
+        path=str(path),
+        width_px=400,
+        height_px=300,
+        box=ImageBox(x=100, y=100, width=200, height=150),
+        page_width_pt=612,
+        page_height_pt=792,
+    )
+
+
+def test_chosen_image_is_shown_in_the_outline_and_placed_on_its_slide(app, pdf_path, tmp_path):
+    app.deck.pdf.images = [_figure(tmp_path)]
+    app.deck.llm.image_ids = ["img-p1-0"]
+
+    _, _, outline, log, *_ = _generate(app, pdf_path)
+    assert "🖼 Image `img-p1-0`" in outline
+    assert "extract_pdf: Extracted 1 pages and 1 images." in log
+    assert "Outline generated (1 images placed)." in log
+
+    prs = _render_with(app, pdf_path, None)
+    pictures = [s for s in prs.slides[1].shapes if s.shape_type == MSO_SHAPE_TYPE.PICTURE]
+    assert len(pictures) == 1
+
+
+def test_invented_and_reused_image_ids_are_cleared(app, pdf_path, tmp_path):
+    app.deck.pdf.images = [_figure(tmp_path)]
+    app.deck.llm.image_ids = ["img-p9-9", "img-p1-0", "img-p1-0"]
+
+    _, _, outline, log, *_ = _generate(app, pdf_path)
+
+    assert "img-p9-9" not in outline
+    assert outline.count("🖼 Image `img-p1-0`") == 1
+    assert "Outline generated (1 images placed)." in log
+
+
+def test_page_range_from_the_form_selects_the_pages(app, pdf_path):
+    app.deck.pdf.page_count = 10
+
+    views = list(app.run_deck(
+        pdf_path, "technical-minimal", "educational", "balanced", "Aptos", None, "3", " 5 "
+    ))
+
+    assert "extract_pdf: Extracted 3 pages (3-5) and 0 images." in views[-1][3]
+    assert "Outline ready" in views[-1][1]
+
+
+def test_page_range_past_the_end_of_the_pdf_stops_the_run(app, pdf_path):
+    app.deck.pdf.page_count = 10
+
+    views = list(app.run_deck(
+        pdf_path, "technical-minimal", "educational", "balanced", "Aptos", None, "8", "12"
+    ))
+
+    assert views[-1][1] == "**Stopped:** Pages 8-12 are outside the PDF, which has 10 pages."
+
+
+def test_reversed_page_range_is_refused_before_the_run_starts(app, pdf_path):
+    with pytest.raises(gr.Error, match="Invalid page range: First page 5 is after last page 3"):
+        list(app.run_deck(
+            pdf_path, "technical-minimal", "educational", "balanced", "Aptos", None, "5", "3"
+        ))
+
+
+@pytest.mark.parametrize("first, last", [("abc", ""), ("2.5", ""), ("", "-4")])
+def test_page_range_that_is_not_a_page_number_is_refused(app, pdf_path, first, last):
+    with pytest.raises(gr.Error, match="is not a page number"):
+        list(app.run_deck(
+            pdf_path, "technical-minimal", "educational", "balanced", "Aptos", None, first, last
+        ))
+
+
+def test_empty_page_range_fields_use_the_whole_pdf(app, pdf_path):
+    app.deck.pdf.page_count = 4
+
+    views = list(app.run_deck(
+        pdf_path, "technical-minimal", "educational", "balanced", "Aptos", None, "", "  "
+    ))
+
+    assert "extract_pdf: Extracted 4 pages and 0 images." in views[-1][3]
