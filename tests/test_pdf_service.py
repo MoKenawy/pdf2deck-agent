@@ -3,7 +3,9 @@ from pathlib import Path
 import pytest
 from PIL import Image
 from pypdf import PdfReader, PdfWriter, Transformation
+from pypdf.generic import ContentStream, DictionaryObject, NameObject
 
+from pdf2deck.schemas import PageRange
 from pdf2deck.services.pdf_service import PdfService
 
 
@@ -87,3 +89,56 @@ def test_max_images_keeps_the_earliest(tmp_path: Path):
     images = _extract(reader, tmp_path, max_images=2)
 
     assert [image.id for image in images] == ["img-p1-0", "img-p2-0"]
+
+
+def _chapter(tmp_path: Path, page_count: int) -> Path:
+    """Pages reading "Page n", each also showing a different 300x200 image."""
+    colors = ["red", "green", "blue", "orange", "purple"]
+    images = _image_pages(tmp_path, *(_image(300, 200, colors[n]) for n in range(page_count)))
+    helvetica = DictionaryObject({
+        NameObject("/Type"): NameObject("/Font"),
+        NameObject("/Subtype"): NameObject("/Type1"),
+        NameObject("/BaseFont"): NameObject("/Helvetica"),
+    })
+    writer = PdfWriter()
+    for number in range(1, page_count + 1):
+        page = writer.add_blank_page(width=400, height=400)
+        page[NameObject("/Resources")] = DictionaryObject({
+            NameObject("/Font"): DictionaryObject({NameObject("/F1"): helvetica}),
+        })
+        text = ContentStream(None, writer)
+        text.set_data(f"BT /F1 12 Tf 20 380 Td (Page {number}) Tj ET".encode())
+        page.replace_contents(text)
+        page.merge_page(images.pages[number - 1])
+    path = tmp_path / "chapter.pdf"
+    with path.open("wb") as f:
+        writer.write(f)
+    return path
+
+
+def test_page_range_keeps_only_those_pages_under_their_pdf_numbers(tmp_path: Path):
+    path = _chapter(tmp_path, page_count=4)
+
+    doc = PdfService().extract_document(
+        path, tmp_path / "images", page_range=PageRange(first=2, last=3)
+    )
+
+    assert [(page.number, page.text.strip()) for page in doc.pages] == [(2, "Page 2"), (3, "Page 3")]
+    assert [image.id for image in doc.images] == ["img-p2-0", "img-p3-0"]
+
+
+def test_open_ended_page_range_runs_to_the_last_page(tmp_path: Path):
+    path = _chapter(tmp_path, page_count=4)
+
+    doc = PdfService().extract_document(path, tmp_path / "images", page_range=PageRange(first=3))
+
+    assert [page.number for page in doc.pages] == [3, 4]
+
+
+def test_page_range_outside_the_pdf_is_rejected(tmp_path: Path):
+    path = _chapter(tmp_path, page_count=4)
+
+    with pytest.raises(ValueError, match="Pages 3-9 are outside the PDF, which has 4 pages"):
+        PdfService().extract_document(
+            path, tmp_path / "images", page_range=PageRange(first=3, last=9)
+        )

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class StrictModel(BaseModel):
@@ -54,6 +54,28 @@ class DocumentChunk(StrictModel):
     page_start: int = Field(ge=1)
     page_end: int = Field(ge=1)
     text: str = Field(min_length=1)
+
+
+class PageRange(StrictModel):
+    """The pages to build the deck from, numbered from 1; no last page means to the end."""
+
+    first: int = Field(default=1, ge=1)
+    last: int | None = Field(default=None, ge=1)
+
+    @model_validator(mode="after")
+    def _first_not_after_last(self) -> PageRange:
+        if self.last is not None and self.last < self.first:
+            raise ValueError(f"First page {self.first} is after last page {self.last}.")
+        return self
+
+    def numbers(self, page_count: int) -> range:
+        """The selected page numbers, checked against the PDF's page count."""
+        last = page_count if self.last is None else self.last
+        if self.first > page_count or last > page_count:
+            raise ValueError(
+                f"Pages {self.first}-{last} are outside the PDF, which has {page_count} pages."
+            )
+        return range(self.first, last + 1)
 
 
 class SourcePage(StrictModel):
@@ -129,6 +151,7 @@ class DeckState(StrictModel):
     run_id: str
     pdf_path: str
     style: StylePreferences
+    page_range: PageRange = Field(default_factory=PageRange)
     document: SourceDocument | None = None
     outline: DeckOutline | None = None
     styled_slides: list[StyledSlide] = Field(default_factory=list)
