@@ -13,6 +13,7 @@ from .schemas import (
     DeckOutline,
     DeckState,
     ExecutionEvent,
+    PageRange,
     SourceDocument,
     StrictModel,
     StyledSlide,
@@ -51,15 +52,19 @@ class DeckGraph:
         doc = self.pdf.extract_document(
             Path(state.pdf_path),
             self.settings.output_dir / state.run_id / "images",
+            page_range=state.page_range,
             min_image_px=self.settings.min_image_px,
             repeated_image_pages=self.settings.repeated_image_pages,
             max_images=self.settings.max_images,
         )
+        selected = ""
+        if state.page_range != PageRange():
+            selected = f" ({doc.pages[0].number}-{doc.pages[-1].number})"
         return {
             "document": doc,
             "events": self._event(
                 state, "extract_pdf", "completed",
-                f"Extracted {len(doc.pages)} pages and {len(doc.images)} images.",
+                f"Extracted {len(doc.pages)} pages{selected} and {len(doc.images)} images.",
             ),
         }
 

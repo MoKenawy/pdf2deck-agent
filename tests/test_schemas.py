@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from pdf2deck.schemas import Fonts, Palette, StylePreferences
+from pdf2deck.schemas import Fonts, PageRange, Palette, StylePreferences
 
 
 def test_style_rejects_unknown_fields():
@@ -32,3 +32,12 @@ def test_style_round_trips_through_json():
         fonts=Fonts(heading="Arial", body="Georgia"),
     )
     assert StylePreferences.model_validate_json(style.model_dump_json()) == style
+
+
+def test_page_range_rejects_a_first_page_after_the_last():
+    with pytest.raises(ValidationError, match="First page 5 is after last page 3"):
+        PageRange(first=5, last=3)
+
+
+def test_page_range_defaults_to_the_whole_pdf():
+    assert PageRange().numbers(4) == range(1, 5)

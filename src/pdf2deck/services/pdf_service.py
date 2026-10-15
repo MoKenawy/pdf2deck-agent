@@ -7,7 +7,7 @@ from pathlib import Path
 from pypdf import PageObject, PdfReader
 from pypdf.generic import StreamObject
 
-from ..schemas import ImageBox, SourceDocument, SourceImage, SourcePage
+from ..schemas import ImageBox, PageRange, SourceDocument, SourceImage, SourcePage
 
 logger = logging.getLogger(__name__)
 
@@ -43,35 +43,43 @@ class PdfService:
         path: Path,
         image_dir: Path,
         *,
+        page_range: PageRange | None = None,
         min_image_px: int = 100,
         repeated_image_pages: int = 3,
         max_images: int = 40,
     ) -> SourceDocument:
-        """Return each page's text and the content images, saved as PNGs in image_dir."""
+        """Return the text and content images of the selected pages, images saved as PNGs.
+
+        Pages keep their numbers in the PDF, so slides and image ids point at the real page.
+        """
         reader = PdfReader(str(path))
-        texts = _page_texts(reader)
+        numbers = (page_range or PageRange()).numbers(len(reader.pages))
+        texts = _page_texts(reader, numbers)
         images = self.extract_images(
             reader,
             image_dir,
+            numbers=numbers,
             min_image_px=min_image_px,
             repeated_image_pages=repeated_image_pages,
             max_images=max_images,
         )
         return SourceDocument(
             filename=path.name,
-            pages=[SourcePage(number=number, text=text) for number, text in enumerate(texts, start=1)],
+            pages=[SourcePage(number=number, text=text) for number, text in zip(numbers, texts)],
             images=images,
         )
 
     def extract_pages(self, path: Path) -> list[str]:
         """Return the raw text of each page, in page order."""
-        return _page_texts(PdfReader(str(path)))
+        reader = PdfReader(str(path))
+        return _page_texts(reader, range(1, len(reader.pages) + 1))
 
     def extract_images(
         self,
         reader: PdfReader,
         image_dir: Path,
         *,
+        numbers: range | None = None,
         min_image_px: int,
         repeated_image_pages: int,
         max_images: int,
@@ -85,10 +93,12 @@ class PdfService:
         Only images drawn directly by the page are found; ones inside form XObjects and
         inline images are skipped, and page rotation is ignored.
         """
+        if numbers is None:
+            numbers = range(1, len(reader.pages) + 1)
         candidates = [
             placement
-            for number, page in enumerate(reader.pages, start=1)
-            for placement in _placements(page, number)
+            for number in numbers
+            for placement in _placements(reader.pages[number - 1], number)
             if min(placement.width_px, placement.height_px) >= min_image_px
             and _coverage(placement) >= MIN_PAGE_COVERAGE
         ]
@@ -132,10 +142,11 @@ class PdfService:
         return images
 
 
-def _page_texts(reader: PdfReader) -> list[str]:
-    texts = [page.extract_text() or "" for page in reader.pages]
+def _page_texts(reader: PdfReader, numbers: range) -> list[str]:
+    texts = [reader.pages[number - 1].extract_text() or "" for number in numbers]
     if not any(text.strip() for text in texts):
-        raise ValueError("No extractable text was found in the PDF.")
+        where = "the PDF" if len(numbers) == len(reader.pages) else f"pages {numbers[0]}-{numbers[-1]}"
+        raise ValueError(f"No extractable text was found in {where}.")
     return texts
 
 
