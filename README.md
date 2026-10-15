@@ -98,7 +98,7 @@ The look of the deck comes from a JSON preferences file. Every field is optional
 
 ### Starting from a PowerPoint template
 
-Open **Create a preferences file from a PPTX template** in the UI, upload a `.pptx` and press **Extract preferences**. This reads the template's slide size, theme colours, theme fonts, text sizes and text density into a preferences file. Review or edit it, then upload it as the preferences file.
+Open **Create a preferences file from a PPTX template** in the UI, upload a `.pptx` and press **Extract preferences**. This reads the template's slide size, the colours and fonts its slides use (title colour, accent, body text, background), its text sizes and its text density into a preferences file. Where the slides set no colours or fonts of their own, the template's theme is used. Review or edit it, then upload it as the preferences file.
 
 The template itself is not used to build the deck, so its backgrounds, artwork and layouts do not carry over.
 
