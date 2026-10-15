@@ -2,6 +2,29 @@
 
 A production-oriented MVP that converts a PDF chapter into a structured, styled PowerPoint deck.
 
+## Demo
+
+[![PDF2Deck Agent turning a biology chapter into a deck](docs/ui-guide/img/overview.jpg)](https://drive.google.com/file/d/1uawnigtD5zGxpa5VG-PiQdWk6DqU9cnA/view)
+
+▶ **[Watch the test run](https://drive.google.com/file/d/1uawnigtD5zGxpa5VG-PiQdWk6DqU9cnA/view)**: chapter 1 of OpenStax *Concepts of Biology* goes from PDF to an approved, styled PowerPoint deck, including both review checkpoints.
+
+## User guide
+
+The **[UI guide](https://claude.ai/artifact/PKysyCzwVWGjdrjnKngJVw)** walks through the screen step by step with annotated screenshots: uploading a chapter, choosing pages, setting the style, approving the outline and the deck, and building a preferences file from a PowerPoint template. A copy is kept in the repo at [`docs/ui-guide/index.html`](docs/ui-guide/index.html); open it in a browser after cloning.
+
+| Review the outline | Download the deck |
+| --- | --- |
+| ![Outline ready for review with Approve and Reject buttons](docs/ui-guide/img/outline.jpg) | ![Rendered PPTX ready to approve and download](docs/ui-guide/img/deck.jpg) |
+
+## What's new
+
+- **Slide images.** Content images are extracted from the PDF with their page position. Decoration is dropped first: very small images and images repeated across many pages. The model picks at most one image per slide, and the renderer places it beside the bullets.
+- **Page range.** Optional **First page** and **Last page** fields limit extraction to part of the PDF. Pages keep their original numbers, so `source_pages` and image ids still point at the real page.
+- **Whole-page outline.** The outline step receives whole pages in one request instead of chunks.
+- **Preferences file.** A JSON preferences file replaces the PPTX template for styling, and the UI can create one from an existing `.pptx` (see [Personalization](#personalization)).
+- **Review flow.** The outline and deck approvals work reliably in the Gradio UI, and the status line and graph log show progress while a run is going.
+- **Any OpenAI-compatible endpoint.** Set `OPENAI_BASE_URL` in `.env` to use another provider or a local server.
+
 ## Architecture
 
 ```mermaid
@@ -35,7 +58,7 @@ uv run pdf2deck
 
 `uv sync` creates `.venv`, installs the project in editable mode with the `dev` extra, and writes `uv.lock`. `uv run` executes inside that environment, so there is no need to activate it.
 
-Open the Gradio URL printed by the app.
+Open the Gradio URL printed by the app (usually http://127.0.0.1:7860). The [UI guide](#user-guide) covers the rest.
 
 Development commands:
 

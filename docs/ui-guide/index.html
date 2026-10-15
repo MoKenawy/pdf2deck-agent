@@ -1,0 +1,406 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>PDF2Deck Agent UI Guide</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=Source+Sans+3:wght@400;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a single reading column of numbered steps; each step pairs a cropped screenshot (with pins) and a matching legend. */
+:root {
+  --bg: #f6f8f6;
+  --surface: #ffffff;
+  --fg: #16201a;
+  --muted: #56645b;
+  --line: #dbe3dd;
+  --accent: #23704f;
+  --accent-soft: #e2f0e8;
+  --pin: #1d6a49;
+  --pin-ring: #ffffff;
+  --warn: #9a4b10;
+  --code-bg: #eef2ef;
+  --display: "Archivo", "Segoe UI", system-ui, sans-serif;
+  --body: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1411; --surface: #161d19; --fg: #e4ebe6; --muted: #9caaa1; --line: #29332d;
+    --accent: #62c79c; --accent-soft: #1b2d24; --pin: #1d6a49; --pin-ring: #e4ebe6;
+    --warn: #f0a868; --code-bg: #1c2420; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1411; --surface: #161d19; --fg: #e4ebe6; --muted: #9caaa1; --line: #29332d;
+  --accent: #62c79c; --accent-soft: #1b2d24; --pin: #1d6a49; --pin-ring: #e4ebe6;
+  --warn: #f0a868; --code-bg: #1c2420; color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--fg);
+  font: 17px/1.6 var(--body);
+  padding-inline: 20px; padding-block: 0 64px;
+}
+.wrap { max-width: 1040px; margin: 0 auto; }
+h1, h2, h3 { font-family: var(--display); text-wrap: balance; line-height: 1.15; margin: 0; }
+p { margin: 0; max-width: 68ch; }
+code, pre, kbd { font-family: var(--mono); font-size: 0.86em; }
+code { background: var(--code-bg); padding: 0.1em 0.35em; border-radius: 4px; }
+a { color: var(--accent); }
+strong { font-weight: 600; }
+
+/* Header */
+header { padding-block: 56px 32px; display: grid; gap: 18px; border-bottom: 1px solid var(--line); }
+.eyebrow { font: 600 13px/1 var(--display); letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); }
+h1 { font-size: clamp(34px, 6vw, 54px); font-weight: 800; letter-spacing: -0.01em; }
+.lede { font-size: 19px; color: var(--muted); }
+.start { display: flex; flex-wrap: wrap; gap: 12px 28px; align-items: center; margin-top: 6px; }
+.start pre { margin: 0; background: var(--fg); color: var(--bg); padding: 10px 16px; border-radius: 8px; font-size: 15px; }
+.start span { color: var(--muted); font-size: 15px; }
+
+/* Flow strip */
+.flow { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; padding: 0; list-style: none; }
+.flow li { display: flex; align-items: center; gap: 8px; font: 600 14px/1 var(--display); }
+.flow li span { padding: 9px 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); }
+.flow li.check span { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.flow li:not(:last-child)::after { content: "→"; color: var(--muted); font-weight: 400; }
+
+/* Sections and steps */
+section { padding-block: 48px 8px; display: grid; gap: 28px; }
+section > h2 { font-size: clamp(26px, 4vw, 34px); font-weight: 700; }
+section > .intro { color: var(--muted); margin-top: -14px; }
+.step { display: grid; gap: 16px; padding-block: 8px 28px; border-bottom: 1px solid var(--line); }
+.step:last-child { border-bottom: 0; }
+.step-head { display: flex; gap: 14px; align-items: baseline; }
+.step-num { font: 800 15px/1 var(--display); color: var(--accent); letter-spacing: 0.06em; min-width: 3.2em; }
+.step h3 { font-size: 22px; font-weight: 700; }
+.step-body { display: grid; gap: 12px; padding-left: calc(3.2em + 14px); }
+.badge { display: inline-block; font: 600 11px/1 var(--display); letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--accent); background: var(--accent-soft); border-radius: 4px; padding: 5px 7px; margin-left: 10px; vertical-align: 3px; }
+
+/* Screenshots with pins */
+.shot { position: relative; margin: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden;
+  background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.05), 0 8px 24px -12px rgba(20,40,30,0.18); }
+.shot img { display: block; width: 100%; height: auto; }
+.shot.narrow { max-width: 720px; }
+.pin { position: absolute; transform: translate(-50%, -50%); width: 30px; height: 30px; border-radius: 50%;
+  background: var(--pin); color: #fff; font: 700 14px/30px var(--display); text-align: center;
+  box-shadow: 0 0 0 3px var(--pin-ring), 0 3px 10px rgba(0,0,0,0.35); }
+.legend { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+.legend li { display: grid; grid-template-columns: 30px 1fr; gap: 12px; align-items: start; min-width: 0; }
+.legend li::before { content: attr(data-n); width: 26px; height: 26px; border-radius: 50%; background: var(--pin); color: #fff;
+  font: 700 13px/26px var(--display); text-align: center; margin-top: 1px; }
+.legend.cols { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); column-gap: 32px; }
+.legend h4 { grid-column: 1 / -1; margin: 6px 0 0; font: 600 12px/1 var(--display); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.legend h4::before { content: none; }
+
+.note { border-left: 3px solid var(--accent); background: var(--surface); padding: 12px 16px; border-radius: 0 8px 8px 0; color: var(--fg); max-width: 72ch; }
+.note.warn { border-left-color: var(--warn); }
+.note b { font-weight: 600; }
+
+/* Colour edit */
+.swatches { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+.pal { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: grid; gap: 10px; }
+.pal-title { font: 600 12px/1 var(--display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.chips { display: flex; gap: 10px; flex-wrap: wrap; }
+.chip { display: flex; align-items: center; gap: 8px; font: 13px var(--mono); }
+.chip i { width: 26px; height: 26px; border-radius: 6px; border: 1px solid rgba(0,0,0,0.12); display: block; }
+pre.json { margin: 0; background: var(--code-bg); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.55; }
+pre.json .k { color: var(--muted); }
+pre.json .hl { background: var(--accent-soft); color: var(--accent); border-radius: 3px; padding: 0 2px; }
+
+/* Troubleshooting table */
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; min-width: 640px; font-size: 15.5px; }
+th, td { text-align: left; padding: 11px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font: 600 12px/1.2 var(--display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+tr:last-child td { border-bottom: 0; }
+td:first-child { font-family: var(--mono); font-size: 13.5px; width: 34%; }
+
+footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; }
+
+@media (max-width: 640px) {
+  body { font-size: 16px; padding-inline: 16px; }
+  .step-body { padding-left: 0; }
+  .pin { width: 22px; height: 22px; font-size: 11px; line-height: 22px; box-shadow: 0 0 0 2px var(--pin-ring), 0 2px 6px rgba(0,0,0,0.35); }
+  .legend.cols { grid-template-columns: 1fr; }
+}
+</style>
+
+<div class="wrap">
+<header>
+  <div class="eyebrow">PDF2Deck Agent · how to use the UI</div>
+  <h1>From chapter PDF to styled deck</h1>
+  <p class="lede">Upload a chapter, pick a style, and the agent builds a PowerPoint deck from it. You approve twice: once on the outline, before anything is rendered, and once on the finished deck.</p>
+  <div class="start">
+    <pre>uv run pdf2deck</pre>
+    <span>Then open the URL it prints, usually <code>http://127.0.0.1:7860</code></span>
+  </div>
+  <ol class="flow" aria-label="Workflow">
+    <li><span>Upload PDF</span></li>
+    <li><span>Set style</span></li>
+    <li><span>Generate</span></li>
+    <li class="check"><span>Approve outline</span></li>
+    <li class="check"><span>Approve deck</span></li>
+    <li><span>Download .pptx</span></li>
+  </ol>
+</header>
+
+<section id="overview">
+  <h2>The screen at a glance</h2>
+  <p class="intro">Inputs live in the left column. Everything you review and approve appears in the right column. The style fields, the <b>Generate</b> button and the run log sit further down the left column.</p>
+  <figure class="shot">
+    <img src="img/overview.jpg" alt="The full PDF2Deck Agent screen with a chapter PDF uploaded and no run started" width="1900" height="868">
+    <span class="pin" style="left:9%;top:11.2%">1</span>
+    <span class="pin" style="left:24.9%;top:31.5%">2</span>
+    <span class="pin" style="left:16.5%;top:48.6%">3</span>
+    <span class="pin" style="left:22.5%;top:86.8%">4</span>
+    <span class="pin" style="left:66%;top:11%">5</span>
+    <span class="pin" style="left:79%;top:18.1%">6</span>
+    <span class="pin" style="left:74.2%;top:26.6%">7</span>
+    <span class="pin" style="left:58.6%;top:33.6%">8</span>
+    <span class="pin" style="left:74.2%;top:74.9%">9</span>
+  </figure>
+  <ol class="legend cols">
+    <h4>Inputs (left)</h4>
+    <li data-n="1"><span><b>Chapter PDF</b>: the document to turn into slides.</span></li>
+    <li data-n="2"><span><b>First page / Last page</b>: optional. Leave both empty to use the whole PDF.</span></li>
+    <li data-n="3"><span><b>Optional preferences file (JSON)</b>: a saved style. It replaces the style fields below it.</span></li>
+    <li data-n="4"><span><b>Create a preferences file from a PPTX template</b>: copies the look of an existing deck.</span></li>
+    <h4>Review (right)</h4>
+    <li data-n="5"><span><b>Status line</b>: what the agent is doing, or what it needs from you.</span></li>
+    <li data-n="6"><span><b>Outline</b>: the proposed slides appear here for review.</span></li>
+    <li data-n="7"><span><b>Approve / Reject outline</b>: first checkpoint.</span></li>
+    <li data-n="8"><span><b>PPTX output</b>: the rendered deck, ready to download.</span></li>
+    <li data-n="9"><span><b>Approve / Reject deck</b>: second checkpoint.</span></li>
+  </ol>
+</section>
+
+<section id="steps">
+  <h2>Make a deck, step by step</h2>
+
+  <div class="step">
+    <div class="step-head"><span class="step-num">STEP 1</span><h3>Upload the chapter</h3></div>
+    <div class="step-body">
+      <p>Drop the PDF on <b>Chapter PDF</b>, or click it to browse. To use only part of the document, type page numbers into <b>First page</b> and <b>Last page</b>. Empty fields mean page 1 and the last page.</p>
+      <figure class="shot narrow">
+        <img src="img/upload.jpg" alt="Chapter PDF field with ConceptsOfBiology-LR-Chapter-1.pdf uploaded, and empty First page and Last page fields" width="960" height="400">
+        <span class="pin" style="left:18%;top:24.3%">1</span>
+        <span class="pin" style="left:49.5%;top:82%">2</span>
+      </figure>
+      <ol class="legend">
+        <li data-n="1"><span>The uploaded file shows its name and size. The <b>×</b> in the corner removes it.</span></li>
+        <li data-n="2"><span>Page range. Whole numbers only; a first page after the last page is rejected before the run starts.</span></li>
+      </ol>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-head"><span class="step-num">STEP 2</span><h3>Choose a style and press Generate</h3></div>
+    <div class="step-body">
+      <p>Set <b>Style name</b>, <b>Tone</b> (formal, educational, executive or conversational), <b>Density</b> (sparse, balanced or dense) and <b>Font</b>. Then press <b>Generate</b>. If you already have a preferences file, upload it instead and skip these fields (see <a href="#preferences">Reuse a deck's look</a>).</p>
+      <figure class="shot narrow">
+        <img src="img/style.jpg" alt="Style name, Tone, Density and Font fields, the orange Generate button, and the Graph execution log listing every completed step" width="960" height="868">
+        <span class="pin" style="left:94%;top:7%">1</span>
+        <span class="pin" style="left:17.5%;top:13.9%">2</span>
+        <span class="pin" style="left:66%;top:67.5%">3</span>
+        <span class="pin" style="left:21.5%;top:75.5%">4</span>
+      </figure>
+      <ol class="legend">
+        <li data-n="1"><span>Reminder: while a preferences file is loaded, these four fields are ignored.</span></li>
+        <li data-n="2"><span>The four style fields. The defaults shown (<code>technical-minimal</code>, educational, balanced, Aptos) work for most chapters.</span></li>
+        <li data-n="3"><span><b>Generate</b> starts a new run. Each press creates a new <b>Run ID</b>.</span></li>
+        <li data-n="4"><span><b>Graph execution</b>: a live log of each step. The one shown here is a finished run, from <code>validate_input</code> through <code>validate_artifact</code>.</span></li>
+      </ol>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-head"><span class="step-num">STEP 3</span><h3>Wait for the outline</h3></div>
+    <div class="step-body">
+      <p>Text and images come out of the PDF in seconds. Writing the outline with the language model is the slow part. For this 21-page chapter it took about 75 seconds, and longer chapters take several minutes. The page doesn't need any input while it works.</p>
+      <figure class="shot narrow">
+        <img src="img/running.jpg" alt="Status line reading: Generating the outline with gemini-3.8-flash, this is the slow step and can take several minutes for a long chapter" width="960" height="700">
+        <span class="pin" style="left:47%;top:5.5%">1</span>
+        <span class="pin" style="left:50%;top:32.5%">2</span>
+      </figure>
+      <ol class="legend">
+        <li data-n="1"><span>The status line names the model in use and tells you this step is slow.</span></li>
+        <li data-n="2"><span>Review buttons stay greyed out until there is something to review.</span></li>
+      </ol>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-head"><span class="step-num">STEP 4</span><h3>Review the outline <span class="badge">Checkpoint 1</span></h3></div>
+    <div class="step-body">
+      <p>When the status says <b>Outline ready for review</b>, scroll the outline panel. It lists the deck title, the learning objectives, then every slide with its purpose, its key points, its layout type and any image it will use. Nothing has been rendered yet, so this is the cheapest place to catch problems.</p>
+      <figure class="shot narrow">
+        <img src="img/outline.jpg" alt="Outline ready for review: Introduction to Biology, learning objectives, slide 1 of type title with image img-p1-0, and enabled Approve outline and Reject outline buttons" width="960" height="868">
+        <span class="pin" style="left:48.5%;top:10.9%">1</span>
+        <span class="pin" style="left:37.5%;top:18.5%">2</span>
+        <span class="pin" style="left:37.2%;top:58.9%">3</span>
+        <span class="pin" style="left:21.6%;top:85.3%">4</span>
+        <span class="pin" style="left:4.8%;top:95.2%">5</span>
+        <span class="pin" style="left:52.7%;top:95.2%">6</span>
+      </figure>
+      <ol class="legend">
+        <li data-n="1"><span>The status confirms the run is waiting for you.</span></li>
+        <li data-n="2"><span>Deck title, subtitle and learning objectives.</span></li>
+        <li data-n="3"><span>Each slide shows its layout type: <code>title</code>, <code>concept</code>, <code>bullets</code>, <code>comparison</code> or <code>summary</code>.</span></li>
+        <li data-n="4"><span>Figures are taken from the PDF. <code>img-p1-0</code> is the first image on page 1.</span></li>
+        <li data-n="5"><span><b>Approve outline</b> renders the deck.</span></li>
+        <li data-n="6"><span><b>Reject outline</b> stops the run. Change the inputs or style, then press <b>Generate</b> again.</span></li>
+      </ol>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-head"><span class="step-num">STEP 5</span><h3>Download and check the deck <span class="badge">Checkpoint 2</span></h3></div>
+    <div class="step-body">
+      <p>Rendering takes a few seconds. The status reports how many slides were made, and the file appears under <b>PPTX output</b>. Download it, open it in PowerPoint, then come back and decide.</p>
+      <figure class="shot narrow">
+        <img src="img/deck.jpg" alt="PPTX output showing d0d22f8f-734a-4a6c-9c06-3940558fe138.pptx, 5.5 MB, with enabled Approve deck and Reject deck buttons" width="960" height="500">
+        <span class="pin" style="left:94.5%;top:68%">1</span>
+        <span class="pin" style="left:4.8%;top:89.2%">2</span>
+        <span class="pin" style="left:52.7%;top:89.2%">3</span>
+      </figure>
+      <ol class="legend">
+        <li data-n="1"><span>Click the size link to download. The file is named after the run ID and is also saved in the project's <code>outputs/</code> folder.</span></li>
+        <li data-n="2"><span><b>Approve deck</b> marks the run complete.</span></li>
+        <li data-n="3"><span><b>Reject deck</b> ends the run without approving it. Adjust the style and generate again.</span></li>
+      </ol>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-head"><span class="step-num">STEP 6</span><h3>Done</h3></div>
+    <div class="step-body">
+      <p>The status changes to <b>Deck approved</b>. The final file stays under <b>PPTX output</b>, and the outline stays on screen for reference.</p>
+      <figure class="shot narrow">
+        <img src="img/approved.jpg" alt="Status line reading: Deck approved. The final PPTX is available below." width="960" height="200">
+        <span class="pin" style="left:43.5%;top:47.5%">1</span>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<section id="preferences">
+  <h2>Reuse a deck's look</h2>
+  <p class="intro">A preferences file stores a whole style as JSON: colours, fonts, type sizes, slide size, tone and density. You can create one from any existing .pptx, then use it on any PDF. In the test run, the deck Gemini produced was turned into a preferences file this way.</p>
+
+  <div class="step">
+    <div class="step-head"><span class="step-num">STEP A</span><h3>Extract preferences from a template</h3></div>
+    <div class="step-body">
+      <p>Open <b>Create a preferences file from a PPTX template</b>, drop a .pptx on <b>PPTX template</b>, and press <b>Extract preferences</b>.</p>
+      <figure class="shot narrow">
+        <img src="img/template.jpg" alt="The template section open, with Introduction to Biology.pptx uploaded, the Extract preferences button, and the start of the extracted JSON" width="960" height="868">
+        <span class="pin" style="left:44%;top:40.7%">1</span>
+        <span class="pin" style="left:34.5%;top:53.9%">2</span>
+        <span class="pin" style="left:65.5%;top:66%">3</span>
+        <span class="pin" style="left:26.5%;top:72.9%">4</span>
+      </figure>
+      <ol class="legend">
+        <li data-n="1"><span>Click the section title to open or close it.</span></li>
+        <li data-n="2"><span>The template deck. None of its content is copied into your slides.</span></li>
+        <li data-n="3"><span><b>Extract preferences</b> reads the theme colours and fonts, the common text sizes, the slide size, and how much text a typical slide holds (which sets the density).</span></li>
+        <li data-n="4"><span>The result appears as JSON just below.</span></li>
+      </ol>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-head"><span class="step-num">STEP B</span><h3>Check the JSON and download the file</h3></div>
+    <div class="step-body">
+      <p>Read through the extracted values, starting with the colours. They come from the template's theme. A deck that colours its shapes directly, rather than through the theme, can return the theme's stock accents instead of the colours you see on its slides. That happened here.</p>
+      <figure class="shot narrow">
+        <img src="img/json.jpg" alt="Extracted preferences JSON with colours main 4F81BD and highlight C0504D, fonts Calibri, and a downloadable introduction-to-biology.preferences.json file" width="960" height="868">
+        <span class="pin" style="left:24%;top:29.6%">1</span>
+        <span class="pin" style="left:88.5%;top:4.4%">2</span>
+        <span class="pin" style="left:95%;top:78.6%">3</span>
+      </figure>
+      <ol class="legend">
+        <li data-n="1"><span><code>colors</code>: here the theme's stock blue and red came back, not the greens used on the Gemini slides.</span></li>
+        <li data-n="2"><span>Download or copy the JSON.</span></li>
+        <li data-n="3"><span><b>Preferences file</b>: the same JSON saved as <code>&lt;name&gt;.preferences.json</code>. Click the size to download it.</span></li>
+      </ol>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-head"><span class="step-num">STEP C</span><h3>Edit it if needed</h3></div>
+    <div class="step-body">
+      <p>Open the downloaded file in any text editor. In the test run, only the two accent colours were changed, to match the green of the source deck.</p>
+      <div class="swatches">
+        <div class="pal">
+          <span class="pal-title">As extracted</span>
+          <div class="chips">
+            <span class="chip"><i style="background:#4F81BD"></i>main #4F81BD</span>
+            <span class="chip"><i style="background:#C0504D"></i>highlight #C0504D</span>
+          </div>
+        </div>
+        <div class="pal">
+          <span class="pal-title">After editing</span>
+          <div class="chips">
+            <span class="chip"><i style="background:#4FBD8B"></i>main #4FBD8B</span>
+            <span class="chip"><i style="background:#348B64"></i>highlight #348B64</span>
+          </div>
+        </div>
+      </div>
+<pre class="json">{
+  <span class="k">"name":</span> "introduction-to-biology",
+  <span class="k">"tone":</span> "educational",
+  <span class="k">"density":</span> "balanced",
+  <span class="k">"colors":</span> {
+    <span class="k">"main":</span> <span class="hl">"#4fbd8b"</span>,
+    <span class="k">"highlight":</span> <span class="hl">"#348b64"</span>,
+    <span class="k">"text":</span> "#000000",
+    <span class="k">"background":</span> "#FFFFFF"
+  },
+  <span class="k">"fonts":</span> { <span class="k">"heading":</span> "Calibri", <span class="k">"body":</span> "Calibri" },
+  <span class="k">"type_scale":</span> { <span class="k">"title_pt":</span> 27.0, <span class="k">"body_pt":</span> 12.0 }
+}</pre>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-head"><span class="step-num">STEP D</span><h3>Load it and generate</h3></div>
+    <div class="step-body">
+      <p>Upload the file to <b>Optional preferences file (JSON)</b>, then press <b>Generate</b> and continue from step 3. The file stays loaded for later runs until you remove it.</p>
+      <figure class="shot narrow">
+        <img src="img/loaded.jpg" alt="Optional preferences file field holding introduction-to-biology.preferences.json, 464 bytes" width="960" height="330">
+        <span class="pin" style="left:44%;top:52%">1</span>
+        <span class="pin" style="left:96.4%;top:52%">2</span>
+      </figure>
+      <ol class="legend">
+        <li data-n="1"><span>The loaded preferences file. Style name, Tone, Density and Font are now ignored.</span></li>
+        <li data-n="2"><span>Remove it with <b>×</b> to go back to the style fields.</span></li>
+      </ol>
+      <p class="note">If the project's settings name a default preferences file, the style fields stay locked even with nothing uploaded, and the note above them names that file.</p>
+    </div>
+  </div>
+</section>
+
+<section id="troubleshooting">
+  <h2>When something goes wrong</h2>
+  <p class="intro">Messages appear as a pop-up or in the status line.</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Message</th><th>What happened</th><th>What to do</th></tr></thead>
+      <tbody>
+        <tr><td>Upload a PDF first.</td><td>Generate was pressed with no chapter loaded.</td><td>Add the PDF in step 1.</td></tr>
+        <tr><td>Invalid page range: …</td><td>A page field holds something other than a page number, or the range is out of order.</td><td>Fix the numbers, or clear both fields.</td></tr>
+        <tr><td>Stopped: Pages … are outside the PDF, …</td><td>The page range goes past the end of the document.</td><td>Use a last page within the PDF's page count, or leave it empty.</td></tr>
+        <tr><td>Stopped: Outline was rejected. …</td><td>You pressed Reject outline.</td><td>Change the inputs and press Generate for a fresh run.</td></tr>
+        <tr><td>Stopped: Deck was rejected.</td><td>You pressed Reject deck.</td><td>Adjust the style and generate again.</td></tr>
+        <tr><td>No outline is waiting for review.</td><td>A review button was clicked after that checkpoint had passed.</td><td>Check the status line to see where the run is.</td></tr>
+        <tr><td>Failed: …</td><td>The model call or rendering raised an error.</td><td>Read the terminal running <code>uv run pdf2deck</code> for details, then retry.</td></tr>
+        <tr><td>Upload a PPTX template first.</td><td>Extract preferences was pressed with no template.</td><td>Drop a .pptx on PPTX template.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<footer>Screenshots from the 15 October 2026 test run on <i>Concepts of Biology</i>, Chapter 1 · <a href="https://github.com/MoKenawy/pdf2deck-agent">github.com/MoKenawy/pdf2deck-agent</a></footer>
+</div>
+
+</body></html>
