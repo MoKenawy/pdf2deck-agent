@@ -8,8 +8,7 @@ A production-oriented MVP that converts a PDF chapter into a structured, styled 
 flowchart TD
     A[Gradio Upload + Style] --> B[validate_input]
     B --> C[extract_pdf]
-    C --> D[chunk_document]
-    D --> E[build_outline]
+    C --> E[build_outline]
     E --> F{HITL: approve outline}
     F -->|reject| E
     F -->|approve| G[map_style]
