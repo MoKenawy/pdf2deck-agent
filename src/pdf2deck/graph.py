@@ -9,7 +9,14 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command, interrupt
 
 from .config import Settings
-from .schemas import DeckState, ExecutionEvent, StrictModel, StyledSlide
+from .schemas import (
+    DeckOutline,
+    DeckState,
+    ExecutionEvent,
+    SourceDocument,
+    StrictModel,
+    StyledSlide,
+)
 from .services.llm_service import LlmService
 from .services.pdf_service import PdfService
 from .services.pptx_service import PptxService
@@ -65,9 +72,13 @@ class DeckGraph:
             state.style.density,
             self.settings.max_slides,
         )
+        outline = _known_images_once(outline, state.document)
+        placed = sum(1 for slide in outline.slides if slide.image_id)
         return {
             "outline": outline,
-            "events": self._event(state, "build_outline", "completed", "Outline generated."),
+            "events": self._event(
+                state, "build_outline", "completed", f"Outline generated ({placed} images placed).",
+            ),
         }
 
     def approve_outline(self, state: DeckState) -> dict:
@@ -169,3 +180,17 @@ class DeckGraph:
         )
         checkpointer = InMemorySaver(serde=serde)
         return graph.compile(checkpointer=checkpointer)
+
+
+def _known_images_once(outline: DeckOutline, document: SourceDocument) -> DeckOutline:
+    """Clear image ids the model invented or reused, so each image appears at most once."""
+    known = {image.id for image in document.images}
+    used: set[str] = set()
+    slides = []
+    for slide in outline.slides:
+        if slide.image_id is not None and (slide.image_id not in known or slide.image_id in used):
+            slide = slide.model_copy(update={"image_id": None})
+        if slide.image_id is not None:
+            used.add(slide.image_id)
+        slides.append(slide)
+    return outline.model_copy(update={"slides": slides})

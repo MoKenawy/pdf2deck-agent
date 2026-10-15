@@ -94,6 +94,7 @@ class SlidePlan(StrictModel):
     key_points: list[str] = Field(min_length=1, max_length=8)
     source_pages: list[int] = Field(min_length=1)
     visual_type: Literal["title", "bullets", "comparison", "process", "concept", "summary"] = "bullets"
+    image_id: str | None = None
     speaker_notes: str = ""
 
 

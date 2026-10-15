@@ -2,30 +2,52 @@ from pathlib import Path
 
 import gradio as gr
 import pytest
+from PIL import Image
 from pptx import Presentation
 from pptx.util import Inches
 
 from pdf2deck.config import Settings
 from pdf2deck.graph import DeckGraph
 from pdf2deck.preferences import load_preferences
-from pdf2deck.schemas import DeckOutline, SlidePlan, SourceDocument, SourcePage
+from pdf2deck.schemas import (
+    DeckOutline,
+    ImageBox,
+    SlidePlan,
+    SourceDocument,
+    SourceImage,
+    SourcePage,
+)
 
 
 class FakePdf:
+    def __init__(self) -> None:
+        self.images: list[SourceImage] = []
+
     def extract_document(self, path: Path, image_dir: Path, **limits) -> SourceDocument:
-        return SourceDocument(filename=path.name, pages=[SourcePage(number=1, text="Source text.")])
+        return SourceDocument(
+            filename=path.name,
+            pages=[SourcePage(number=1, text="Source text.")],
+            images=self.images,
+        )
 
 
 class FakeLlm:
+    def __init__(self) -> None:
+        self.image_ids: list[str | None] = [None]
+
     def create_outline(self, document, tone, density, max_slides) -> DeckOutline:
-        slide = SlidePlan(
-            slide_id="s1",
-            title="First slide",
-            purpose="Introduce the topic",
-            key_points=["Point one", "Point two"],
-            source_pages=[1],
-        )
-        return DeckOutline(title="Fake deck", learning_objectives=["Learn it"], slides=[slide])
+        slides = [
+            SlidePlan(
+                slide_id=f"s{number}",
+                title="First slide" if number == 1 else f"Slide {number}",
+                purpose="Introduce the topic",
+                key_points=["Point one", "Point two"],
+                source_pages=[1],
+                image_id=image_id,
+            )
+            for number, image_id in enumerate(self.image_ids, start=1)
+        ]
+        return DeckOutline(title="Fake deck", learning_objectives=["Learn it"], slides=slides)
 
 
 @pytest.fixture
@@ -40,6 +62,8 @@ def app(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     deck.llm = FakeLlm()
     monkeypatch.setattr(app_module, "graph", deck.build())
     monkeypatch.setattr(app_module, "settings", settings)
+    # Lets a test choose what the fakes return.
+    monkeypatch.setattr(app_module, "deck", deck, raising=False)
     return app_module
 
 
@@ -67,7 +91,7 @@ def test_generate_shows_outline_and_waits_for_outline_review(app, pdf_path):
     assert "## Fake deck" in outline
     assert "### 1. First slide" in outline
     assert "- Point one" in outline
-    assert "build_outline: Outline generated." in log
+    assert "build_outline: Outline generated (0 images placed)." in log
     assert output is None
     assert _enabled(buttons) == [True, True, False, False]
 
@@ -204,3 +228,29 @@ def test_rejecting_outline_stops_the_run(app, pdf_path):
     assert "Outline was rejected" in status
     assert output is None
     assert _enabled(buttons) == [False, False, False, False]
+
+
+def _figure(tmp_path: Path) -> SourceImage:
+    path = tmp_path / "img-p1-0.png"
+    Image.new("RGB", (400, 300), "red").save(path)
+    return SourceImage(
+        id="img-p1-0",
+        page=1,
+        path=str(path),
+        width_px=400,
+        height_px=300,
+        box=ImageBox(x=100, y=100, width=200, height=150),
+        page_width_pt=612,
+        page_height_pt=792,
+    )
+
+
+def test_invented_and_reused_image_ids_are_cleared(app, pdf_path, tmp_path):
+    app.deck.pdf.images = [_figure(tmp_path)]
+    app.deck.llm.image_ids = ["img-p9-9", "img-p1-0", "img-p1-0"]
+
+    _, _, outline, log, *_ = _generate(app, pdf_path)
+
+    assert "img-p9-9" not in outline
+    assert outline.count("🖼 Image `img-p1-0`") == 1
+    assert "Outline generated (1 images placed)." in log

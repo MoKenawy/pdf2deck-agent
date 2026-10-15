@@ -72,6 +72,8 @@ def _outline_markdown(outline: DeckOutline | None) -> str:
         blocks.append(f"### {number}. {slide.title} · `{slide.visual_type}`")
         blocks.append(f"*{slide.purpose}*")
         blocks.append("\n".join(f"- {point}" for point in slide.key_points))
+        if slide.image_id:
+            blocks.append(f"🖼 Image `{slide.image_id}`")
     return "\n\n".join(blocks)
 
 
