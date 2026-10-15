@@ -61,9 +61,30 @@ class SourcePage(StrictModel):
     text: str
 
 
+class ImageBox(StrictModel):
+    """Where an image is drawn on its page, in points from the page's top-left corner."""
+
+    x: float
+    y: float
+    width: float = Field(gt=0)
+    height: float = Field(gt=0)
+
+
+class SourceImage(StrictModel):
+    id: str = Field(min_length=1)
+    page: int = Field(ge=1)
+    path: str
+    width_px: int = Field(ge=1)
+    height_px: int = Field(ge=1)
+    box: ImageBox
+    page_width_pt: float = Field(gt=0)
+    page_height_pt: float = Field(gt=0)
+
+
 class SourceDocument(StrictModel):
     filename: str
     pages: list[SourcePage] = Field(min_length=1)
+    images: list[SourceImage] = Field(default_factory=list)
 
 
 class SlidePlan(StrictModel):

@@ -41,11 +41,18 @@ class DeckGraph:
         return {"events": self._event(state, "validate_input", "completed", "Input validated.")}
 
     def extract_pdf(self, state: DeckState) -> dict:
-        doc = self.pdf.extract_document(Path(state.pdf_path))
+        doc = self.pdf.extract_document(
+            Path(state.pdf_path),
+            self.settings.output_dir / state.run_id / "images",
+            min_image_px=self.settings.min_image_px,
+            repeated_image_pages=self.settings.repeated_image_pages,
+            max_images=self.settings.max_images,
+        )
         return {
             "document": doc,
             "events": self._event(
-                state, "extract_pdf", "completed", f"Extracted {len(doc.pages)} pages.",
+                state, "extract_pdf", "completed",
+                f"Extracted {len(doc.pages)} pages and {len(doc.images)} images.",
             ),
         }
 

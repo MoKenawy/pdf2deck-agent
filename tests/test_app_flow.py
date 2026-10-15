@@ -12,7 +12,7 @@ from pdf2deck.schemas import DeckOutline, SlidePlan, SourceDocument, SourcePage
 
 
 class FakePdf:
-    def extract_document(self, path: Path) -> SourceDocument:
+    def extract_document(self, path: Path, image_dir: Path, **limits) -> SourceDocument:
         return SourceDocument(filename=path.name, pages=[SourcePage(number=1, text="Source text.")])
 
 

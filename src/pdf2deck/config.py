@@ -24,6 +24,12 @@ class Settings(BaseSettings):
     max_pdf_mb: int = Field(default=50, gt=0)
     # Reserved for services/chunking.py; the graph sends whole pages for now.
     max_chunk_chars: int = Field(default=12000, gt=1000)
+    # Images smaller than this on either side (logos, bullets) are not extracted.
+    min_image_px: int = Field(default=100, ge=1)
+    # An image drawn on this many pages or more is decoration (headers, icons).
+    repeated_image_pages: int = Field(default=3, ge=2)
+    # Every extracted image is sent to the model, so this bounds the outline cost.
+    max_images: int = Field(default=40, ge=0)
     max_slides: int = Field(default=30, ge=3, le=100)
     default_preferences_path: Path | None = None
 
