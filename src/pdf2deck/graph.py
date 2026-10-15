@@ -98,14 +98,18 @@ class DeckGraph:
     def map_style(self, state: DeckState) -> dict:
         if state.outline is None:
             raise ValueError("Outline is required.")
-        styled = [
-            StyledSlide(
-                plan=slide,
-                layout_name=slide.visual_type,
-                style_name=state.style.name,
+        images = {image.id: image for image in state.document.images} if state.document else {}
+        styled = []
+        for slide in state.outline.slides:
+            image = images.get(slide.image_id) if slide.image_id else None
+            styled.append(
+                StyledSlide(
+                    plan=slide,
+                    layout_name="bullets-with-image" if image else slide.visual_type,
+                    style_name=state.style.name,
+                    image=image,
+                )
             )
-            for slide in state.outline.slides
-        ]
         return {
             "styled_slides": styled,
             "events": self._event(state, "map_style", "completed", "Style mapped to slide plans."),

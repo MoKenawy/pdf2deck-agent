@@ -4,6 +4,7 @@ import gradio as gr
 import pytest
 from PIL import Image
 from pptx import Presentation
+from pptx.enum.shapes import MSO_SHAPE_TYPE
 from pptx.util import Inches
 
 from pdf2deck.config import Settings
@@ -243,6 +244,20 @@ def _figure(tmp_path: Path) -> SourceImage:
         page_width_pt=612,
         page_height_pt=792,
     )
+
+
+def test_chosen_image_is_shown_in_the_outline_and_placed_on_its_slide(app, pdf_path, tmp_path):
+    app.deck.pdf.images = [_figure(tmp_path)]
+    app.deck.llm.image_ids = ["img-p1-0"]
+
+    _, _, outline, log, *_ = _generate(app, pdf_path)
+    assert "🖼 Image `img-p1-0`" in outline
+    assert "extract_pdf: Extracted 1 pages and 1 images." in log
+    assert "Outline generated (1 images placed)." in log
+
+    prs = _render_with(app, pdf_path, None)
+    pictures = [s for s in prs.slides[1].shapes if s.shape_type == MSO_SHAPE_TYPE.PICTURE]
+    assert len(pictures) == 1
 
 
 def test_invented_and_reused_image_ids_are_cleared(app, pdf_path, tmp_path):

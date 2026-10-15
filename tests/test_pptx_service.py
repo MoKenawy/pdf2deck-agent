@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+from PIL import Image
 from pptx import Presentation
 from pptx.dml.color import RGBColor
 from pptx.enum.shapes import MSO_SHAPE_TYPE
@@ -8,9 +10,11 @@ from pptx.util import Inches, Pt
 from pdf2deck.schemas import (
     DeckOutline,
     Fonts,
+    ImageBox,
     Palette,
     SlidePlan,
     SlideSize,
+    SourceImage,
     StyledSlide,
     StylePreferences,
     TypeScale,
@@ -26,17 +30,22 @@ STYLE = StylePreferences(
 )
 
 
-def _render(tmp_path: Path, style: StylePreferences = STYLE) -> Presentation:
+def _render(
+    tmp_path: Path, style: StylePreferences = STYLE, image: SourceImage | None = None
+) -> Presentation:
     plan = SlidePlan(
         slide_id="s1",
         title="First slide",
         purpose="Introduce the topic",
         key_points=["Point one", "Point two"],
         source_pages=[1],
+        image_id=image.id if image else None,
         speaker_notes="Say this.",
     )
     outline = DeckOutline(title="Fake deck", subtitle="A subtitle", slides=[plan])
-    styled = [StyledSlide(plan=plan, layout_name=plan.visual_type, style_name=style.name)]
+    styled = [
+        StyledSlide(plan=plan, layout_name=plan.visual_type, style_name=style.name, image=image)
+    ]
 
     artifact = PptxService().render(outline, styled, style, tmp_path / "out" / "deck.pptx")
 
@@ -92,8 +101,57 @@ def test_background_and_rule_use_the_palette(tmp_path: Path):
     assert rule.fill.fore_color.rgb == RGBColor.from_string("F2A40D")
 
 
-def test_everything_stays_inside_the_slide(tmp_path: Path):
-    prs = _render(tmp_path)
+def _source_image(tmp_path: Path, width_px: int, height_px: int) -> SourceImage:
+    path = tmp_path / "figure.png"
+    Image.new("RGB", (width_px, height_px), "red").save(path)
+    return SourceImage(
+        id="img-p1-0",
+        page=1,
+        path=str(path),
+        width_px=width_px,
+        height_px=height_px,
+        box=ImageBox(x=0, y=0, width=width_px, height=height_px),
+        page_width_pt=612,
+        page_height_pt=792,
+    )
+
+
+def _body(slide):
+    return next(
+        shape for shape in slide.shapes
+        if shape.has_text_frame and shape.text_frame.text.startswith("Point one")
+    )
+
+
+def test_slide_image_sits_right_of_the_bullets_at_its_own_aspect_ratio(tmp_path: Path):
+    prs = _render(tmp_path, image=_source_image(tmp_path, 400, 300))
+    slide = prs.slides[1]
+    [picture] = [shape for shape in slide.shapes if shape.shape_type == MSO_SHAPE_TYPE.PICTURE]
+    body = _body(slide)
+
+    assert picture.left >= body.left + body.width
+    assert picture.left + picture.width <= prs.slide_width
+    assert picture.width / picture.height == pytest.approx(400 / 300, rel=0.01)
+    assert body.width < _body(_render(tmp_path / "plain").slides[1]).width
+
+
+def test_slide_without_an_image_has_no_picture(tmp_path: Path):
+    slide = _render(tmp_path).slides[1]
+
+    assert not any(shape.shape_type == MSO_SHAPE_TYPE.PICTURE for shape in slide.shapes)
+
+
+def test_missing_image_file_is_reported(tmp_path: Path):
+    image = _source_image(tmp_path, 400, 300)
+    Path(image.path).unlink()
+
+    with pytest.raises(ValueError, match="img-p1-0 is missing"):
+        _render(tmp_path, image=image)
+
+
+@pytest.mark.parametrize("size", [None, (400, 300), (200, 900)])
+def test_everything_stays_inside_the_slide(tmp_path: Path, size: tuple[int, int] | None):
+    prs = _render(tmp_path, image=_source_image(tmp_path, *size) if size else None)
 
     for slide in prs.slides:
         for shape in slide.shapes:

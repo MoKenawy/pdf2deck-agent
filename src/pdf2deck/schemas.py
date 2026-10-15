@@ -109,6 +109,7 @@ class StyledSlide(StrictModel):
     plan: SlidePlan
     layout_name: str
     style_name: str
+    image: SourceImage | None = None
 
 
 class DeckArtifact(StrictModel):

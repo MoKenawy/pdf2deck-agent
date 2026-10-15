@@ -7,7 +7,7 @@ from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
 from pptx.oxml.ns import qn
 from pptx.util import Inches, Pt
 
-from ..schemas import DeckArtifact, DeckOutline, StyledSlide, StylePreferences
+from ..schemas import DeckArtifact, DeckOutline, SourceImage, StyledSlide, StylePreferences
 
 # Index of the empty layout in python-pptx's bundled default template. Its other
 # layouts position their placeholders for a 10 x 7.5 in slide, so every slide is
@@ -19,6 +19,13 @@ MARGIN_X = 0.06
 CONTENT_WIDTH = 1 - 2 * MARGIN_X
 RULE_HEIGHT = 0.008
 BULLET_INDENT = Inches(0.3)
+BODY_TOP = 0.27
+BODY_HEIGHT = 0.65
+
+# A slide with an image keeps its bullets on the left and fits the image on the right.
+TEXT_WITH_IMAGE_WIDTH = CONTENT_WIDTH * 0.56
+IMAGE_COLUMN_LEFT = MARGIN_X + CONTENT_WIDTH * 0.60
+IMAGE_COLUMN_WIDTH = CONTENT_WIDTH * 0.40
 
 
 class PptxService:
@@ -93,7 +100,12 @@ class PptxService:
 
         self._add_rule(prs, slide, style, left=MARGIN_X, top=0.235, width=CONTENT_WIDTH)
 
-        body = self._text_frame(prs, slide, top=0.27, height=0.65)
+        body_width = CONTENT_WIDTH
+        if styled.image is not None:
+            body_width = TEXT_WITH_IMAGE_WIDTH
+            self._add_image(prs, slide, styled.image)
+
+        body = self._text_frame(prs, slide, top=BODY_TOP, height=BODY_HEIGHT, width=body_width)
         for index, point in enumerate(plan.key_points):
             paragraph = body.paragraphs[0] if index == 0 else body.add_paragraph()
             paragraph.space_after = Pt(style.type_scale.body_pt * 0.4)
@@ -114,11 +126,13 @@ class PptxService:
         fill.solid()
         fill.fore_color.rgb = self._rgb(style.colors.background)
 
-    def _text_frame(self, prs: Presentation, slide, top: float, height: float):
+    def _text_frame(
+        self, prs: Presentation, slide, top: float, height: float, width: float = CONTENT_WIDTH
+    ):
         box = slide.shapes.add_textbox(
             int(prs.slide_width * MARGIN_X),
             int(prs.slide_height * top),
-            int(prs.slide_width * CONTENT_WIDTH),
+            int(prs.slide_width * width),
             int(prs.slide_height * height),
         )
         frame = box.text_frame
@@ -126,6 +140,20 @@ class PptxService:
         # No side insets, so text lines up with the rule.
         frame.margin_left = frame.margin_right = 0
         return frame
+
+    def _add_image(self, prs: Presentation, slide, image: SourceImage) -> None:
+        path = Path(image.path)
+        if not path.exists():
+            raise ValueError(f"Extracted image {image.id} is missing: {path}")
+
+        # Fit inside the image column at the image's own aspect ratio, centred.
+        area_width = prs.slide_width * IMAGE_COLUMN_WIDTH
+        area_height = prs.slide_height * BODY_HEIGHT
+        scale = min(area_width / image.width_px, area_height / image.height_px)
+        width, height = image.width_px * scale, image.height_px * scale
+        left = prs.slide_width * IMAGE_COLUMN_LEFT + (area_width - width) / 2
+        top = prs.slide_height * BODY_TOP + (area_height - height) / 2
+        slide.shapes.add_picture(str(path), int(left), int(top), int(width), int(height))
 
     def _add_rule(
         self, prs: Presentation, slide, style: StylePreferences,
