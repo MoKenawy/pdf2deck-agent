@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     checkpoint_backend: str = "memory"
     output_dir: Path = Path("./outputs")
     max_pdf_mb: int = Field(default=50, gt=0)
+    # Reserved for services/chunking.py; the graph sends whole pages for now.
     max_chunk_chars: int = Field(default=12000, gt=1000)
     max_slides: int = Field(default=30, ge=3, le=100)
     default_preferences_path: Path | None = None

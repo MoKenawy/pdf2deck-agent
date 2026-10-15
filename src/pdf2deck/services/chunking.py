@@ -1,14 +1,13 @@
-from ..schemas import DocumentChunk, SourceDocument
+from ..schemas import DocumentChunk
 
 
-def chunk_pages(filename: str, pages: list[str], max_chunk_chars: int) -> SourceDocument:
-    """Clean and chunk each page's text into a SourceDocument."""
+def chunk_pages(pages: list[str], max_chunk_chars: int) -> list[DocumentChunk]:
+    """Clean and chunk each page's text. Not used by the graph yet."""
     chunks: list[DocumentChunk] = []
     for page_number, text in enumerate(pages, start=1):
         paragraphs = clean_page_text(text)
         chunks.extend(chunk_paragraphs(paragraphs, page_number, max_chunk_chars))
-
-    return SourceDocument(filename=filename, pages=len(pages), chunks=chunks)
+    return chunks
 
 
 def clean_page_text(text: str) -> list[str]:

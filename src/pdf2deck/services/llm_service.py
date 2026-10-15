@@ -21,15 +21,11 @@ class LlmService:
         density: str,
         max_slides: int,
     ) -> DeckOutline:
-        source = "\n\n".join(
-            f"[{chunk.id}] pages {chunk.page_start}-{chunk.page_end}\n{chunk.text}"
-            for chunk in document.chunks
-        )
         prompt = OUTLINE_USER.format(
             tone=tone,
             density=density,
             max_slides=max_slides,
-            source=source,
+            source=source_text(document),
         )
         structured = self.model.with_structured_output(DeckOutline)
         return structured.invoke(
@@ -40,12 +36,13 @@ class LlmService:
         )
 
     def revise_outline(self, outline: DeckOutline, document: SourceDocument) -> DeckOutline:
-        source = "\n\n".join(
-            f"[{chunk.id}] {chunk.text}" for chunk in document.chunks
-        )
         prompt = (
             f"{REVISION_SYSTEM}\n\nCURRENT OUTLINE:\n"
-            f"{outline.model_dump_json(indent=2)}\n\nSOURCE:\n{source}"
+            f"{outline.model_dump_json(indent=2)}\n\nSOURCE:\n{source_text(document)}"
         )
         structured = self.model.with_structured_output(DeckOutline)
         return structured.invoke([("system", REVISION_SYSTEM), ("human", prompt)])
+
+
+def source_text(document: SourceDocument) -> str:
+    return "\n\n".join(f"[page {page.number}]\n{page.text.strip()}" for page in document.pages)

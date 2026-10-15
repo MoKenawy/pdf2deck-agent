@@ -10,7 +10,6 @@ from langgraph.types import Command, interrupt
 
 from .config import Settings
 from .schemas import DeckState, ExecutionEvent, StrictModel, StyledSlide
-from .services.chunking import chunk_pages
 from .services.llm_service import LlmService
 from .services.pdf_service import PdfService
 from .services.pptx_service import PptxService
@@ -42,14 +41,11 @@ class DeckGraph:
         return {"events": self._event(state, "validate_input", "completed", "Input validated.")}
 
     def extract_pdf(self, state: DeckState) -> dict:
-        path = Path(state.pdf_path)
-        pages = self.pdf.extract_pages(path)
-        doc = chunk_pages(path.name, pages, self.settings.max_chunk_chars)
+        doc = self.pdf.extract_document(Path(state.pdf_path))
         return {
             "document": doc,
             "events": self._event(
-                state, "extract_pdf", "completed",
-                f"Extracted {doc.pages} pages into {len(doc.chunks)} chunks.",
+                state, "extract_pdf", "completed", f"Extracted {len(doc.pages)} pages.",
             ),
         }
 

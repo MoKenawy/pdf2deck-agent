@@ -32,7 +32,7 @@ def _render(tmp_path: Path, style: StylePreferences = STYLE) -> Presentation:
         title="First slide",
         purpose="Introduce the topic",
         key_points=["Point one", "Point two"],
-        source_chunk_ids=["p1-c0"],
+        source_pages=[1],
         speaker_notes="Say this.",
     )
     outline = DeckOutline(title="Fake deck", subtitle="A subtitle", slides=[plan])

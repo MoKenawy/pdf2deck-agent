@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import pytest
 from pypdf import PdfWriter
 
 from pdf2deck.services.pdf_service import PdfService
@@ -12,9 +13,5 @@ def test_empty_pdf_is_rejected(tmp_path: Path):
     with path.open("wb") as f:
         writer.write(f)
 
-    try:
-        PdfService().extract_pages(path)
-    except ValueError as exc:
-        assert "No extractable text" in str(exc)
-    else:
-        raise AssertionError("Expected extraction failure")
+    with pytest.raises(ValueError, match="No extractable text"):
+        PdfService().extract_document(path)

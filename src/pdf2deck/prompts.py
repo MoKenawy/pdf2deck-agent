@@ -3,7 +3,7 @@ Transform source chapter content into a faithful presentation outline.
 
 Rules:
 1. Preserve the chapter's important conceptual structure. Do not invent claims.
-2. Every slide must cite one or more source chunk IDs.
+2. Every slide must cite one or more source page numbers in source_pages.
 3. Prefer one coherent idea per slide.
 4. Use concise presentation language, not textbook paragraphs.
 5. Include process/comparison/concept slide types when supported by the source.
@@ -11,7 +11,7 @@ Rules:
 7. Return only data matching the requested structured schema.
 """
 
-OUTLINE_USER = """Create a presentation outline from these chapter chunks.
+OUTLINE_USER = """Create a presentation outline from these chapter pages.
 
 Deck title should reflect the chapter.
 Target tone: {tone}
@@ -27,6 +27,6 @@ Given an existing slide plan and source material, revise only where needed to:
 - remove unsupported claims,
 - restore omitted structural ideas,
 - improve sequencing,
-- keep every slide traceable to source chunk IDs.
+- keep every slide traceable to source page numbers.
 Return the complete revised outline.
 """

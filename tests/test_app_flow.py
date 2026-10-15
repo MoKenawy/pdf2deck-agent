@@ -8,12 +8,12 @@ from pptx.util import Inches
 from pdf2deck.config import Settings
 from pdf2deck.graph import DeckGraph
 from pdf2deck.preferences import load_preferences
-from pdf2deck.schemas import DeckOutline, SlidePlan
+from pdf2deck.schemas import DeckOutline, SlidePlan, SourceDocument, SourcePage
 
 
 class FakePdf:
-    def extract_pages(self, path: Path) -> list[str]:
-        return ["Source text."]
+    def extract_document(self, path: Path) -> SourceDocument:
+        return SourceDocument(filename=path.name, pages=[SourcePage(number=1, text="Source text.")])
 
 
 class FakeLlm:
@@ -23,7 +23,7 @@ class FakeLlm:
             title="First slide",
             purpose="Introduce the topic",
             key_points=["Point one", "Point two"],
-            source_chunk_ids=["p1-c0"],
+            source_pages=[1],
         )
         return DeckOutline(title="Fake deck", learning_objectives=["Learn it"], slides=[slide])
 

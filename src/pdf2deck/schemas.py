@@ -56,10 +56,14 @@ class DocumentChunk(StrictModel):
     text: str = Field(min_length=1)
 
 
+class SourcePage(StrictModel):
+    number: int = Field(ge=1)
+    text: str
+
+
 class SourceDocument(StrictModel):
     filename: str
-    pages: int = Field(ge=1)
-    chunks: list[DocumentChunk]
+    pages: list[SourcePage] = Field(min_length=1)
 
 
 class SlidePlan(StrictModel):
@@ -67,7 +71,7 @@ class SlidePlan(StrictModel):
     title: str = Field(min_length=1, max_length=180)
     purpose: str = Field(min_length=1, max_length=500)
     key_points: list[str] = Field(min_length=1, max_length=8)
-    source_chunk_ids: list[str] = Field(min_length=1)
+    source_pages: list[int] = Field(min_length=1)
     visual_type: Literal["title", "bullets", "comparison", "process", "concept", "summary"] = "bullets"
     speaker_notes: str = ""
 
